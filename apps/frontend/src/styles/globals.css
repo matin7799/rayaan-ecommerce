@@ -1,0 +1,136 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* Brand Colors */
+  --brand-orange: #f04923;
+  --brand-teal: #008080;
+
+  /* Theme Variables */
+  --background: oklch(100% 0 0);
+  --foreground: oklch(9.84% 0.002 285.82);
+  --card: oklch(100% 0 0);
+  --card-foreground: oklch(9.84% 0.002 285.82);
+  --popover: oklch(100% 0 0);
+  --popover-foreground: oklch(9.84% 0.002 285.82);
+  --primary: oklch(50.19% 0.13 192.23);
+  --primary-foreground: oklch(100% 0 0);
+  --secondary: oklch(96.72% 0.001 286.38);
+  --secondary-foreground: oklch(16.53% 0.004 285.82);
+  --muted: oklch(96.72% 0.001 286.38);
+  --muted-foreground: oklch(64.59% 0.015 285.88);
+  --accent: oklch(96.72% 0.001 286.38);
+  --accent-foreground: oklch(16.53% 0.004 285.82);
+  --destructive: oklch(57.68% 0.227 29.7);
+  --destructive-foreground: oklch(100% 0 0);
+  --border: oklch(91.05% 0.002 286.32);
+  --input: oklch(91.05% 0.002 286.32);
+  --ring: oklch(9.84% 0.002 285.82);
+  --chart-1: oklch(62.8% 0.257 12.57);
+  --chart-2: oklch(71.87% 0.184 142.5);
+  --chart-3: oklch(72.32% 0.143 196.2);
+  --chart-4: oklch(66.42% 0.249 305.53);
+  --chart-5: oklch(78.27% 0.169 70.08);
+  --radius: 0.5rem;
+}
+
+.dark {
+  --background: oklch(9.84% 0.002 285.82);
+  --foreground: oklch(98.04% 0.001 286.38);
+  --card: oklch(9.84% 0.002 285.82);
+  --card-foreground: oklch(98.04% 0.001 286.38);
+  --popover: oklch(9.84% 0.002 285.82);
+  --popover-foreground: oklch(98.04% 0.001 286.38);
+  --primary: oklch(50.19% 0.13 192.23);
+  --primary-foreground: oklch(100% 0 0);
+  --secondary: oklch(16.53% 0.004 285.82);
+  --secondary-foreground: oklch(98.04% 0.001 286.38);
+  --muted: oklch(16.53% 0.004 285.82);
+  --muted-foreground: oklch(64.59% 0.015 285.88);
+  --accent: oklch(16.53% 0.004 285.82);
+  --accent-foreground: oklch(98.04% 0.001 286.38);
+  --destructive: oklch(57.68% 0.227 29.7);
+  --destructive-foreground: oklch(100% 0 0);
+  --border: oklch(16.53% 0.004 285.82);
+  --input: oklch(16.53% 0.004 285.82);
+  --ring: oklch(83.2% 0.007 286.05);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+    outline-color: color-mix(in oklch, var(--ring), transparent 60%);
+  }
+
+  html {
+    scroll-behavior: smooth;
+    scrollbar-gutter: stable; 
+    overflow-y: scroll;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-feature-settings: "rlig" 1, "calt" 1;
+    font-family: var(--font-yekan), system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: var(--muted);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--muted-foreground);
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--primary);
+  }
+
+  ::selection {
+    background-color: var(--primary);
+    color: var(--primary-foreground);
+  }
+
+  button {
+    transition: all 0.2s ease;
+  }
+}
+@layer utilities {
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 16px);
+  }
+}
+
+/* اسکرول بار اختصاصی و ظریف */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  @apply bg-gray-300 dark:bg-gray-700 rounded-full;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-400 dark:bg-gray-600;
+}
+
+.dir-ltr{
+  direction: ltr;
+}
+
+.dir-rtl{
+  direction: rtl;
+}
