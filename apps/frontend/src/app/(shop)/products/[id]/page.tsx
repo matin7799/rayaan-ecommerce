@@ -1,4 +1,5 @@
 import { Metadata } from "next";
+import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { ProductGallery } from "@/components/product/product-gallery";
 import { ProductInfo } from "@/components/product/product-info";
@@ -6,15 +7,32 @@ import { ProductTabs } from "@/components/product/product-tabs";
 import { RelatedProducts } from "@/components/product/related-products";
 import { productService } from "@/services";
 
+async function isTorobAttributionActive(utmSource?: string): Promise<boolean> {
+  if (utmSource?.toLowerCase() === "torob") {
+    return true;
+  }
+
+  const cookieStore = await cookies();
+  const until = Number(cookieStore.get("torob_attribution_until")?.value ?? "0");
+  return until > 0;
+}
+
 // Generate metadata for SEO
 export async function generateMetadata({ 
-  params 
+  params,
+  searchParams,
 }: { 
-  params: Promise<{ id: string }> 
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ utm_source?: string }>;
 }): Promise<Metadata> {
   try {
     const { id } = await params;
-    const product = await productService.getProductBySlug(id);
+    const query = await searchParams;
+    const isTorob = await isTorobAttributionActive(query.utm_source);
+    const product = await productService.getProductBySlug(
+      id,
+      isTorob ? 'torob' : undefined,
+    );
     
     return {
       title: `${product.title} | فروشگاه`,
@@ -28,26 +46,69 @@ export async function generateMetadata({
 }
 
 // Server Component
-export default async function ProductDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ProductDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ utm_source?: string }>;
+}) {
   const { id } = await params;
+  const query = await searchParams;
+  const isTorob = await isTorobAttributionActive(query.utm_source);
   let product;
   
   try {
-    product = await productService.getProductBySlug(id);
+    product = await productService.getProductBySlug(
+      id,
+      isTorob ? 'torob' : undefined,
+    );
   } catch {
     notFound();
   }
 
-  const stock = product.stockQuantity || 0;
+  const stock = Number(product.stockQuantity) || 0;
+  const pricingData = (product.pricing ?? {}) as {
+    basePrice?: number | string;
+    finalPrice?: number | string;
+    base_price?: number | string;
+    final_price?: number | string;
+  };
+  const basePrice =
+    Number(pricingData.basePrice ?? pricingData.base_price) || 0;
+  const finalPrice =
+    Number(pricingData.finalPrice ?? pricingData.final_price) || 0;
   
   // Calculate discount percentage
-  const discountPercentage = product.pricing?.basePrice && product.pricing?.finalPrice
-    ? Math.round(((product.pricing.basePrice - product.pricing.finalPrice) / product.pricing.basePrice) * 100)
+  const discountPercentage = basePrice > 0 && finalPrice > 0 && finalPrice < basePrice
+    ? Math.round(((basePrice - finalPrice) / basePrice) * 100)
     : undefined;
 
   // Extract colors from variants (if they have color options)
   const colors: Array<{ id: string; name: string; hex: undefined }> = [];
   const defaultVariant = product.variants?.[0];
+  const variantComparePrice =
+    Number(defaultVariant?.comparePrice) > 0
+      ? Number(defaultVariant?.comparePrice)
+      : undefined;
+  const variantPrice =
+    Number(defaultVariant?.price) > 0 ? Number(defaultVariant?.price) : undefined;
+  const hasCatalogDiscount = finalPrice > 0 && basePrice > finalPrice;
+  const hasVariantDiscount =
+    !!variantPrice && !!variantComparePrice && variantComparePrice > variantPrice;
+
+  const resolvedPrice = hasCatalogDiscount
+    ? finalPrice
+    : hasVariantDiscount
+      ? (variantPrice as number)
+      : finalPrice > 0
+        ? finalPrice
+        : variantPrice ?? basePrice;
+  const resolvedOriginalPrice = hasCatalogDiscount
+    ? basePrice
+    : hasVariantDiscount
+      ? variantComparePrice
+      : undefined;
 
   // Map product data to component format
   const mappedProduct = {
@@ -55,12 +116,21 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     title: product.title,
     brand: product.brand?.name || product.categories?.[0]?.name || '',
     shortDescription: product.shortDescription || product.description || '',
-    price: product.pricing?.finalPrice || product.pricing?.basePrice || 0,
-    originalPrice:
-      product.pricing?.finalPrice && product.pricing?.basePrice > product.pricing?.finalPrice
-        ? product.pricing.basePrice
-        : undefined,
+    price: resolvedPrice,
+    originalPrice: resolvedOriginalPrice,
     discountPercentage,
+    debug:
+      process.env.NODE_ENV !== 'production'
+        ? {
+            channel: (isTorob ? 'torob' : 'public') as 'torob' | 'public',
+            basePrice,
+            finalPrice,
+            variantPrice,
+            variantComparePrice,
+            mappedPrice: resolvedPrice,
+            mappedOriginalPrice: resolvedOriginalPrice,
+          }
+        : undefined,
     rating: product.rating ?? 4.5,
     reviewsCount: product.reviewsCount ?? 0,
     stockStatus: stock,
@@ -116,7 +186,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
       const related = await productService.getProducts({
         categories: categorySlugs,
         limit: 5,
-      });
+      }, isTorob ? 'torob' : undefined);
       
       relatedProducts = related.items
         .filter(p => p.id !== product.id)

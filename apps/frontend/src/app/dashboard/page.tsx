@@ -14,16 +14,16 @@ import { getErrorMessage } from '@/lib/api/error-handler';
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { accessToken, setUser } = useAuthStore();
+  const { accessToken, setUser, sessionChecked } = useAuthStore();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
 
   useEffect(() => {
-    if (!accessToken) {
+    if (sessionChecked && !accessToken) {
       router.replace('/login');
     }
-  }, [accessToken, router]);
+  }, [accessToken, router, sessionChecked]);
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ['profile'],
@@ -63,6 +63,14 @@ export default function DashboardPage() {
     e.preventDefault();
     updateMutation.mutate();
   };
+
+  if (!sessionChecked) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   if (!accessToken) {
     return null;

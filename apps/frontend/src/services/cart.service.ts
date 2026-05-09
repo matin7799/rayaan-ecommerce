@@ -1,5 +1,6 @@
 import { apiClient } from './api-client';
 import { API_ENDPOINTS } from '@/lib/api/endpoints';
+import { useAuthStore } from '@/lib/store/auth-store';
 
 // ========== Types ==========
 export interface CartItemOption {
@@ -13,6 +14,7 @@ export interface CartItem {
   productTitle: string;
   variantSku: string;
   price: number;
+  originalPrice?: number;
   quantity: number;
   subtotal: number;
   options: CartItemOption[];
@@ -67,6 +69,9 @@ const normalizeCart = (cart: Cart | null | undefined): Cart => {
     const item = asRecord(rawItem);
     const quantity = toSafeNumber(read(item, 'quantity'));
     const price = toSafeNumber(read(item, 'price', 'unit_price', 'unitPrice'));
+    const originalPrice = toSafeNumber(
+      read(item, 'original_price', 'base_price', 'compare_price', 'comparePrice'),
+    );
     const subtotal = toSafeNumber(read(item, 'subtotal', 'sub_total')) || price * quantity;
 
     return {
@@ -75,6 +80,7 @@ const normalizeCart = (cart: Cart | null | undefined): Cart => {
       productTitle: String(read(item, 'productTitle', 'product_title', 'title') ?? ''),
       variantSku: String(read(item, 'variantSku', 'variant_sku', 'sku') ?? ''),
       price,
+      originalPrice: originalPrice > price ? originalPrice : undefined,
       quantity,
       subtotal,
       options: (read(item, 'options') as CartItemOption[] | undefined) ?? [],
@@ -110,16 +116,61 @@ const extractCart = (payload: CartEnvelope): Cart => {
   return normalizeCart(payload as Cart);
 };
 
+const GUEST_CART_STORAGE_KEY = 'cart_snapshot_v1';
+
+const getStoredCart = (): Cart | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(GUEST_CART_STORAGE_KEY);
+    if (!raw) return null;
+    return normalizeCart(JSON.parse(raw) as Cart);
+  } catch {
+    return null;
+  }
+};
+
+const setStoredCart = (cart: Cart): void => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(GUEST_CART_STORAGE_KEY, JSON.stringify(normalizeCart(cart)));
+  } catch {
+    // ignore storage quota and private mode errors
+  }
+};
+
+const clearStoredCart = (): void => {
+  if (typeof window === 'undefined') return;
+  window.localStorage.removeItem(GUEST_CART_STORAGE_KEY);
+};
+
+const isAuthenticated = (): boolean => Boolean(useAuthStore.getState().accessToken);
+
 // ========== Cart Service ==========
 export const cartService = {
   /**
    * Get current cart
    */
   getCart: async (): Promise<Cart> => {
-    const { data } = await apiClient.get<CartEnvelope>(
-      API_ENDPOINTS.CART.GET
-    );
-    return extractCart(data);
+    try {
+      const { data } = await apiClient.get<CartEnvelope>(
+        API_ENDPOINTS.CART.GET
+      );
+      const cart = extractCart(data);
+
+      // Keep the most recent non-empty cart snapshot to survive flaky session/cookie refreshes.
+      if (cart.items.length > 0) {
+        setStoredCart(cart);
+      } else if (!isAuthenticated()) {
+        const stored = getStoredCart();
+        if (stored && stored.items.length > 0) return stored;
+      }
+
+      return cart;
+    } catch (error) {
+      const stored = getStoredCart();
+      if (stored) return stored;
+      throw error;
+    }
   },
 
   /**
@@ -130,7 +181,9 @@ export const cartService = {
       API_ENDPOINTS.CART.ADD_ITEM,
       payload
     );
-    return extractCart(data);
+    const cart = extractCart(data);
+    setStoredCart(cart);
+    return cart;
   },
 
   /**
@@ -144,7 +197,9 @@ export const cartService = {
       API_ENDPOINTS.CART.UPDATE_ITEM(variantId),
       payload
     );
-    return extractCart(data);
+    const cart = extractCart(data);
+    setStoredCart(cart);
+    return cart;
   },
 
   /**
@@ -154,7 +209,9 @@ export const cartService = {
     const { data } = await apiClient.delete<CartEnvelope>(
       API_ENDPOINTS.CART.REMOVE_ITEM(variantId)
     );
-    return extractCart(data);
+    const cart = extractCart(data);
+    setStoredCart(cart);
+    return cart;
   },
 
   /**
@@ -162,5 +219,6 @@ export const cartService = {
    */
   clearCart: async (): Promise<void> => {
     await apiClient.delete(API_ENDPOINTS.CART.CLEAR);
+    clearStoredCart();
   },
 };

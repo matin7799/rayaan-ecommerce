@@ -140,7 +140,7 @@ export function AddressDialog({
   return (
     <Dialog open={isOpen} onOpenChange={setOpen}>
       <DialogTrigger render={children} />
-      <DialogContent className="max-w-[calc(100%-2rem)] rounded-2xl sm:max-w-2xl" showCloseButton={!isSubmitting}>
+      <DialogContent className="max-w-[calc(100%-2rem)] rounded-2xl sm:max-w-2xl bg-gray-100/60" showCloseButton={!isSubmitting}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-xl">
             <MapPin className="h-5 w-5 text-primary" />

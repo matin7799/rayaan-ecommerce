@@ -60,7 +60,7 @@ type TabKey = 'all' | Order['status'];
 
 export default function OrdersPage() {
   const [activeTab, setActiveTab] = useState<TabKey>('all');
-  const { accessToken } = useAuthStore();
+  const { accessToken, sessionChecked } = useAuthStore();
   const queryClient = useQueryClient();
 
   const { data, isLoading, isError, error } = useQuery({
@@ -115,7 +115,7 @@ export default function OrdersPage() {
       </div>
 
       {/* Debug info */}
-      {!accessToken && (
+      {sessionChecked && !accessToken && (
         <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4 text-sm text-amber-800 dark:text-amber-200">
           ⚠️ شما وارد سیستم نشده‌اید. لطفا ابتدا وارد شوید.
         </div>
@@ -145,7 +145,11 @@ export default function OrdersPage() {
       </div>
 
       {/* Content */}
-      {isLoading ? (
+      {!sessionChecked ? (
+        <div className="flex items-center justify-center py-24">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      ) : isLoading ? (
         <div className="flex items-center justify-center py-24">
           <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>

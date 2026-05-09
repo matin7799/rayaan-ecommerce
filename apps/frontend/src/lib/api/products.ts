@@ -3,6 +3,7 @@ import { productService, ProductsQueryParams, PaginatedResponse, ProductListItem
 export interface GetProductsParams {
   category?: string;
   categorySlug?: string;
+  categorySlugs?: string[];
   page?: number;
   limit?: number;
   sort?: string;
@@ -19,6 +20,7 @@ export async function getProducts(params?: GetProductsParams): Promise<Paginated
     page: params?.page || 1,
     limit: params?.limit || 20,
     category: params?.category || params?.categorySlug,
+    categorySlugs: params?.categorySlugs,
     minPrice: params?.minPrice,
     maxPrice: params?.maxPrice,
     search: params?.search,

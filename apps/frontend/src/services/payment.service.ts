@@ -11,21 +11,10 @@ export interface InitiatePaymentResponse {
   paymentUrl: string;
 }
 
-export interface VerifyPaymentPayload {
-  authority: string;
-  status: string;
-}
-
-export interface VerifyPaymentResponse {
-  success: boolean;
-  transactionId?: string;
-  message: string;
-}
-
 export interface PaymentListItem {
   id: string;
   order_id: string;
-  amount: number;
+  amount: number | string;
   status: 'pending' | 'success' | 'failed';
   provider: string;
   provider_track_id?: string | null;
@@ -49,20 +38,6 @@ export const paymentService = {
   ): Promise<InitiatePaymentResponse> => {
     const { data } = await apiClient.post<ApiResponse<InitiatePaymentResponse>>(
       API_ENDPOINTS.PAYMENT.INITIATE,
-      payload
-    );
-    return data.data;
-  },
-
-  /**
-   * Verify payment after callback
-   */
-  verifyPayment: async (
-    paymentId: string,
-    payload: VerifyPaymentPayload
-  ): Promise<VerifyPaymentResponse> => {
-    const { data } = await apiClient.post<ApiResponse<VerifyPaymentResponse>>(
-      API_ENDPOINTS.PAYMENT.VERIFY(paymentId),
       payload
     );
     return data.data;

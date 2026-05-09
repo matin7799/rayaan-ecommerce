@@ -88,4 +88,12 @@ export const authService = {
     // TODO: اگر endpoint خروج در بک‌اند وجود دارد، اینجا فراخوانی شود
     // فعلاً فقط پاک کردن توکن‌ها از localStorage کافی است
   },
+
+  refreshSession: async (): Promise<LoginResponse> => {
+    const { data } = await apiClient.post<LoginResponse>(
+      API_ENDPOINTS.AUTH.REFRESH,
+      {}
+    );
+    return data;
+  },
 };

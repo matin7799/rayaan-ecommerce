@@ -3,8 +3,10 @@
 
 import * as React from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import Autoplay from 'embla-carousel-autoplay';
 import {
+  type CarouselApi,
   Carousel,
   CarouselContent,
   CarouselItem,
@@ -13,13 +15,15 @@ import {
 } from '@/components/ui/carousel';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Sparkles, Zap, TrendingUp } from 'lucide-react';
+import { useBanners } from '@/lib/hooks/queries/useBanners';
+import { BannerPosition } from '@/services/banner.service';
 
-const SLIDES = [
+const FALLBACK_SLIDES = [
   {
     id: 1,
-    title: 'جشنواره فروش پاییزه',
-    subtitle: 'تا ۵۰٪ تخفیف برای لپ‌تاپ‌های گیمینگ',
-    badge: 'فروش ویژه',
+    title: 'بهترین قیمت‌ها برای خرید مطمئن',
+    subtitle: 'قیمت رقابتی، تخفیف‌های واقعی و خرید امن برای همه محصولات',
+    badge: 'قیمت ویژه',
     icon: Zap,
     image: 'https://ranew.s3.ir-thr-at1.arvanstorage.ir/banners/banner1.png',
     gradient: 'from-violet-600/95 via-purple-700/90 to-slate-900/95',
@@ -28,9 +32,9 @@ const SLIDES = [
   },
   {
     id: 2,
-    title: 'رونمایی از آیفون ۱۶',
-    subtitle: 'هم‌اکنون با گارانتی ۱۸ ماهه شرکتی',
-    badge: 'جدید',
+    title: 'تنوع گسترده برای هر نیاز',
+    subtitle: 'از لپ‌تاپ و موبایل تا تجهیزات حرفه‌ای برای کار، بازی و روزمره',
+    badge: 'تنوع بالا',
     icon: TrendingUp,
     image: 'https://ranew.s3.ir-thr-at1.arvanstorage.ir/banners/banner1.png',
     gradient: 'from-slate-700/95 via-slate-800/90 to-black/95',
@@ -39,9 +43,9 @@ const SLIDES = [
   },
   {
     id: 3,
-    title: 'هدفون‌های بی‌سیم پریمیوم',
-    subtitle: 'تجربه صدای استودیویی با ۴۰٪ تخفیف',
-    badge: 'پیشنهاد ویژه',
+    title: 'پشتیبانی حرفه‌ای و پاسخ‌گو',
+    subtitle: 'تجربه خرید همراه با مشاوره تخصصی و خدمات مشتریان سریع',
+    badge: 'خدمات ممتاز',
     icon: Sparkles,
     image: 'https://ranew.s3.ir-thr-at1.arvanstorage.ir/banners/banner1.png',
     gradient: 'from-emerald-600/95 via-teal-700/90 to-slate-900/95',
@@ -51,12 +55,49 @@ const SLIDES = [
 ];
 
 export function HeroSlider() {
+  const { data: heroBanners } = useBanners(BannerPosition.HOME_HERO);
   const [plugin] = React.useState(() =>
     Autoplay({ delay: 5000, stopOnInteraction: true, stopOnMouseEnter: true })
   );
 
   const [currentSlide, setCurrentSlide] = React.useState(0);
-  const [api, setApi] = React.useState<any>(null);
+  const [api, setApi] = React.useState<CarouselApi | null>(null);
+
+  const slides = React.useMemo(() => {
+    if (heroBanners && heroBanners.length > 0) {
+      const iconCycle = [Zap, TrendingUp, Sparkles];
+      const gradients = [
+        'from-violet-600/95 via-purple-700/90 to-slate-900/95',
+        'from-slate-700/95 via-slate-800/90 to-black/95',
+        'from-emerald-600/95 via-teal-700/90 to-slate-900/95',
+      ];
+      const accents = [
+        'bg-gradient-to-r from-violet-500 to-purple-600',
+        'bg-gradient-to-r from-slate-500 to-slate-700',
+        'bg-gradient-to-r from-emerald-500 to-teal-600',
+      ];
+      const glows = ['shadow-violet-500/50', 'shadow-slate-500/50', 'shadow-emerald-500/50'];
+
+      return heroBanners
+        .slice()
+        .sort((a, b) => a.order - b.order)
+        .slice(0, 5)
+        .map((banner, index) => ({
+          id: banner.id,
+          title: banner.title,
+          subtitle: banner.description || 'بهترین پیشنهادها برای شما',
+          badge: 'پیشنهاد ویژه',
+          icon: iconCycle[index % iconCycle.length],
+          image: banner.mobileImageUrl || banner.imageUrl,
+          ctaLink: banner.linkUrl || '/products',
+          gradient: gradients[index % gradients.length],
+          accentColor: accents[index % accents.length],
+          glowColor: glows[index % glows.length],
+        }));
+    }
+
+    return FALLBACK_SLIDES.map((item) => ({ ...item, ctaLink: '/products' }));
+  }, [heroBanners]);
 
   React.useEffect(() => {
     if (!api) return;
@@ -77,15 +118,15 @@ export function HeroSlider() {
     <Carousel
       opts={{ loop: true, direction: 'rtl', align: 'start' }}
       plugins={[plugin]}
-      className="w-full h-[400px] rounded-xl overflow-hidden lg:rounded-2xl  group shadow-2xl"
+      className="w-full h-[450px] rounded-xl overflow-hidden lg:rounded-2xl  group shadow-2xl"
       setApi={setApi}
     >
       <CarouselContent className="h-full ml-0">
-        {SLIDES.map((slide, index) => {
+        {slides.map((slide, index) => {
           const IconComponent = slide.icon;
           return (
             <CarouselItem key={slide.id} className="h-full pl-0">
-              <div className="relative h-[400px] w-full overflow-hidden">
+              <div className="relative h-[450px] w-full overflow-hidden">
                 {/* Background Image with Ken Burns Effect */}
                 <div className="absolute inset-0 z-0">
                   <Image
@@ -132,13 +173,15 @@ export function HeroSlider() {
 
                     {/* CTA Button */}
                     <div className="pt-1 sm:pt-2 animate-fade-in-up animation-delay-300">
-                      <Button 
-                        size="lg" 
-                        className="rounded-full bg-white text-slate-900 hover:bg-white/95 hover:scale-105 active:scale-95 transition-all duration-300 shadow-2xl font-bold text-xs sm:text-sm lg:text-base px-4 sm:px-6 lg:px-7 py-3 sm:py-4 lg:py-5 group/btn border-2 border-white/50"
-                      >
-                        <span className="relative z-10">مشاهده و خرید</span>
-                        <ArrowLeft className="mr-2 w-3.5 h-3.5 sm:w-4 sm:h-4 group-hover/btn:-translate-x-1 transition-transform duration-300" />
-                      </Button>
+                      <Link href={slide.ctaLink || '/products'}>
+                        <Button
+                          size="lg"
+                          className="rounded-full bg-white text-slate-900 hover:bg-white/95 hover:scale-105 active:scale-95 transition-all duration-300 shadow-2xl font-bold text-xs sm:text-sm lg:text-base px-4 sm:px-6 lg:px-7 py-3 sm:py-4 lg:py-5 group/btn border-2 border-white/50"
+                        >
+                          <span className="relative z-10">مشاهده و خرید</span>
+                          <ArrowLeft className="mr-2 w-3.5 h-3.5 sm:w-4 sm:h-4 group-hover/btn:-translate-x-1 transition-transform duration-300" />
+                        </Button>
+                      </Link>
                     </div>
                   </div>
                 </div>
@@ -160,7 +203,7 @@ export function HeroSlider() {
 
       {/* Interactive Pagination Dots */}
       <div className="absolute bottom-3 sm:bottom-4 lg:bottom-5 left-1/2 -translate-x-1/2 z-30 flex gap-2">
-        {SLIDES.map((_, index) => (
+        {slides.map((_, index) => (
           <button
             key={index}
             onClick={() => scrollTo(index)}
@@ -179,7 +222,7 @@ export function HeroSlider() {
         <div 
           className="h-full bg-gradient-to-r from-white/60 to-white transition-all duration-300"
           style={{ 
-            width: `${((currentSlide + 1) / SLIDES.length) * 100}%` 
+            width: `${((currentSlide + 1) / slides.length) * 100}%` 
           }}
         />
       </div>

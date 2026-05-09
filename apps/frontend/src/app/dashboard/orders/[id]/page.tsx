@@ -46,6 +46,14 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
   },
 };
 
+type DashboardOrderItem = Order['items'][number] & {
+  id?: string;
+  variant_id?: string;
+  variant_sku?: string;
+  product_title?: string;
+  total_price?: number;
+};
+
 export default function OrderDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const queryClient = useQueryClient();
@@ -207,7 +215,7 @@ export default function OrderDetailsPage({ params }: { params: Promise<{ id: str
             </h2>
             <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
               {order.items && order.items.length > 0 ? (
-                order.items.map((item: any) => (
+                order.items.map((item: DashboardOrderItem) => (
                   <div
                     key={item.id || item.variant_id}
                     className="py-4 first:pt-0 last:pb-0 flex flex-col sm:flex-row gap-4"

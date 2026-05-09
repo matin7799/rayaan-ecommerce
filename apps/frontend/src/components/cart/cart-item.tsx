@@ -9,6 +9,7 @@ interface CartItemProps {
     id: string;
     title: string;
     price: number;
+    originalPrice?: number;
     image: string;
     quantity: number;
     maxQuantity: number;
@@ -29,6 +30,8 @@ export function CartItem({
   const PLACEHOLDER_IMAGE = 'https://ranew.s3.ir-thr-at1.arvanstorage.ir/placeholder.png';
   const safeImage = item.image && item.image.trim().length > 0 ? item.image : PLACEHOLDER_IMAGE;
   const safePrice = Number(item.price) || 0;
+  const safeOriginalPrice = Number(item.originalPrice) || 0;
+  const hasDiscount = safeOriginalPrice > safePrice;
 
   const handleDecrease = () => {
     if (item.quantity > 1 && onUpdateQuantity) {
@@ -58,9 +61,14 @@ export function CartItem({
       {/* Product Info */}
       <div className="flex-1 min-w-0">
         <h3 className="font-semibold text-base line-clamp-2 mb-1">{item.title}</h3>
-        <p className="text-muted-foreground text-sm mb-3">
-          {safePrice.toLocaleString()} تومان
-        </p>
+        <div className="mb-3">
+          {hasDiscount && (
+            <p className="text-xs text-muted-foreground line-through">
+              {safeOriginalPrice.toLocaleString()} تومان
+            </p>
+          )}
+          <p className="text-muted-foreground text-sm">{safePrice.toLocaleString()} تومان</p>
+        </div>
 
         {/* Quantity Controls */}
         <div className="flex items-center gap-4">

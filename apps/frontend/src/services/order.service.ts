@@ -18,18 +18,18 @@ export interface OrderItem {
   variantId: string;
   productTitle: string;
   variantSku: string;
-  price: number;
+  price: number | string;
   quantity: number;
-  subtotal: number;
+  subtotal: number | string;
 }
 
 export interface Order {
   id: string;
   user_id: string;
   items: OrderItem[];
-  shipping_address: any; // JSON field
-  total_price: number;
-  shipping_cost: number;
+  shipping_address: ShippingAddress | Record<string, unknown> | null;
+  total_price: number | string;
+  shipping_cost: number | string;
   status: 'PENDING' | 'PAID' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED';
   payment_ref: string | null;
   payment_method: string | null;

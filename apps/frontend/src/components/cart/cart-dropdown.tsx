@@ -119,10 +119,17 @@ export function CartDropdown() {
                       {item.productTitle}
                     </h4>
                     <div className="flex justify-between items-center mt-auto">
-                      <p className="text-sm text-[#008080] dark:text-[#20B2AA] font-bold tracking-tight">
-                        {(Number(item.price) || 0).toLocaleString('fa-IR')}{' '}
-                        <span className="text-[10px] font-normal text-gray-500 dark:text-gray-400">تومان</span>
-                      </p>
+                      <div className="flex flex-col items-start">
+                        {Number(item.originalPrice) > Number(item.price) && (
+                          <span className="text-[10px] text-gray-400 line-through">
+                            {(Number(item.originalPrice) || 0).toLocaleString('fa-IR')} تومان
+                          </span>
+                        )}
+                        <p className="text-sm text-[#008080] dark:text-[#20B2AA] font-bold tracking-tight">
+                          {(Number(item.price) || 0).toLocaleString('fa-IR')}{' '}
+                          <span className="text-[10px] font-normal text-gray-500 dark:text-gray-400">تومان</span>
+                        </p>
+                      </div>
                       <span className="text-xs text-gray-400">× {item.quantity}</span>
                     </div>
                   </div>

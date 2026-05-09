@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Star, Truck, ShoppingCart, Heart, Activity } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -27,13 +27,48 @@ interface ProductInfoProps {
     stockStatus: number
     colors: ProductColor[]
     variants?: Array<{ id: string; sku: string; price: number }>
+    debug?: {
+      channel?: 'public' | 'torob'
+      basePrice?: number
+      finalPrice?: number
+      mappedPrice?: number
+      mappedOriginalPrice?: number
+    }
   }
 }
 
 export function ProductInfo({ product }: ProductInfoProps) {
+  const TOROB_ATTR_KEY = 'torob_attribution_until'
   const [selectedColor, setSelectedColor] = useState(product.colors[0]?.id || product.variants?.[0]?.id)
   const [quantity, setQuantity] = useState(1)
   const [isAddingToCart, setIsAddingToCart] = useState(false)
+  const [remainingSeconds, setRemainingSeconds] = useState(0)
+  const safePrice = Number(product.price) || 0
+  const safeOriginalPrice = Number(product.originalPrice) || 0
+  const hasDiscount = safeOriginalPrice > safePrice
+  const effectiveDiscountPercentage =
+    hasDiscount
+      ? Math.round(((safeOriginalPrice - safePrice) / safeOriginalPrice) * 100)
+      : undefined
+
+  useEffect(() => {
+    const url = new URL(window.location.href)
+    if (url.searchParams.get('utm_source')?.toLowerCase() === 'torob') {
+      url.searchParams.delete('utm_source')
+      const next = `${url.pathname}${url.search}${url.hash}`
+      window.history.replaceState({}, '', next)
+    }
+
+    const tick = () => {
+      const until = Number.parseInt(localStorage.getItem(TOROB_ATTR_KEY) ?? '0', 10)
+      const diff = Math.max(0, Math.floor((until - Date.now()) / 1000))
+      setRemainingSeconds(diff)
+    }
+
+    tick()
+    const interval = window.setInterval(tick, 1000)
+    return () => window.clearInterval(interval)
+  }, [])
 
   const handleAddToCart = async () => {
     try {
@@ -57,7 +92,19 @@ export function ProductInfo({ product }: ProductInfoProps) {
 
   return (
     <div className="space-y-6">
-      
+      {remainingSeconds > 0 && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-amber-900">
+          تخفیف ویژه ترب فعال است - زمان باقی مانده:{" "}
+          <strong>
+            {Math.floor(remainingSeconds / 60)
+              .toString()
+              .padStart(2, '0')}
+            :
+            {(remainingSeconds % 60).toString().padStart(2, '0')}
+          </strong>
+        </div>
+      )}
+
       {/* برند و امتیاز */}
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium text-muted-foreground">{product.brand}</span>
@@ -105,15 +152,15 @@ export function ProductInfo({ product }: ProductInfoProps) {
       {/* قیمت */}
       <div className="bg-gradient-to-br from-primary/5 to-primary/10 rounded-2xl p-6 border border-primary/20">
         <div className="flex items-baseline gap-3">
-          <span className="text-4xl font-black text-primary">{product.price.toLocaleString()}</span>
+          <span className="text-4xl font-black text-primary">{safePrice.toLocaleString()}</span>
           <span className="text-lg text-muted-foreground">تومان</span>
         </div>
-        {product.originalPrice && (
+        {hasDiscount && (
           <div className="flex items-center gap-3 mt-2">
-            <span className="text-lg text-muted-foreground line-through">{product.originalPrice.toLocaleString()}</span>
-            {product.discountPercentage && (
+            <span className="text-lg text-muted-foreground line-through">{safeOriginalPrice.toLocaleString()}</span>
+            {effectiveDiscountPercentage && (
               <span className="inline-flex items-center px-2 py-1 rounded-lg bg-red-500 text-white text-sm font-bold">
-                {product.discountPercentage}% تخفیف
+                {effectiveDiscountPercentage}% تخفیف
               </span>
             )}
           </div>
@@ -178,7 +225,7 @@ export function ProductInfo({ product }: ProductInfoProps) {
       {/* ارسال رایگان */}
       <div className="flex items-center gap-3 p-4 bg-green-500/10 text-green-700 dark:text-green-400 rounded-xl border border-green-500/20">
         <Truck className="w-5 h-5" />
-        <span className="text-sm font-medium">ارسال رایگان برای سفارش‌های بالای 500 هزار تومان</span>
+        <span className="text-sm font-medium">ارسال سریع به سراسر کشور </span>
       </div>
 
     </div>

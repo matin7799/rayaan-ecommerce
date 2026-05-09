@@ -51,16 +51,26 @@ export default function LoginForm() {
 
   const clearError = () => setError('');
 
+  const validatePhone = () => {
+    const parsed = z
+      .string()
+      .regex(/^09\d{9}$/, 'شماره موبایل باید با 09 شروع شود و 11 رقم باشد')
+      .safeParse(phone);
+
+    if (!parsed.success) {
+      setError(parsed.error.flatten().formErrors[0]);
+      return false;
+    }
+
+    return true;
+  };
+
   // ── Step 1: Request OTP ──────────────────────────────────────────────────
   const handlePhoneSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     clearError();
 
-    const parsed = z.string().regex(/^09\d{9}$/, 'شماره موبایل باید با 09 شروع شود و 11 رقم باشد').safeParse(phone);
-    if (!parsed.success) {
-      setError(parsed.error.flatten().formErrors[0]);
-      return;
-    }
+    if (!validatePhone()) return;
 
     setLoading(true);
     try {
@@ -123,6 +133,17 @@ export default function LoginForm() {
   const handlePasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     clearError();
+
+    if (!validatePhone()) {
+      setStep('PHONE');
+      return;
+    }
+
+    if (!password.trim()) {
+      setError('رمز عبور الزامی است');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -149,49 +170,49 @@ export default function LoginForm() {
     }
   };
 
-// ── Step 3b: Complete registration ──────────────────────────────────────
-const handleRegisterSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  clearError();
+  // ── Step 3b: Complete registration ──────────────────────────────────────
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    clearError();
 
-  if (!firstName.trim() || !lastName.trim()) {
-    setError('نام و نام خانوادگی الزامی است');
-    return;
-  }
-  if (regPassword.length < 8) {
-    setError('رمز عبور باید حداقل ۸ کاراکتر باشد');
-    return;
-  }
-
-  setLoading(true);
-  try {
-    const response = await authService.completeRegistration({
-      firstName: firstName.trim(),
-      lastName: lastName.trim(),
-      password: regPassword,
-      tempToken,
-    });
-    const { accessToken, refreshToken } = response.data;
-    setTokens(accessToken, refreshToken);
-
-    try {
-      const user = await userService.getProfile();
-      setAuth(user, accessToken, refreshToken);
-    } catch {
-      // tokens still valid
+    if (!firstName.trim() || !lastName.trim()) {
+      setError('نام و نام خانوادگی الزامی است');
+      return;
+    }
+    if (regPassword.length < 8) {
+      setError('رمز عبور باید حداقل ۸ کاراکتر باشد');
+      return;
     }
 
-    toast.success('ثبت‌نام با موفقیت انجام شد');
-    const redirect = searchParams.get('redirect') || '/';
-    router.push(redirect);
-  } catch (err) {
-    const msg = getErrorMessage(err);
-    setError(msg);
-    toast.error(msg);
-  } finally {
-    setLoading(false);
-  }
-};
+    setLoading(true);
+    try {
+      const response = await authService.completeRegistration({
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        password: regPassword,
+        tempToken,
+      });
+      const { accessToken, refreshToken } = response.data;
+      setTokens(accessToken, refreshToken);
+
+      try {
+        const user = await userService.getProfile();
+        setAuth(user, accessToken, refreshToken);
+      } catch {
+        // tokens still valid
+      }
+
+      toast.success('ثبت‌نام با موفقیت انجام شد');
+      const redirect = searchParams.get('redirect') || '/';
+      router.push(redirect);
+    } catch (err) {
+      const msg = getErrorMessage(err);
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // ── Resend OTP ───────────────────────────────────────────────────────────
   const handleResendOtp = async () => {
@@ -212,7 +233,6 @@ const handleRegisterSubmit = async (e: React.FormEvent) => {
   // ── Render ───────────────────────────────────────────────────────────────
   return (
     <div className="bg-white/70 dark:bg-zinc-900/70 backdrop-blur-3xl border border-zinc-200/50 dark:border-zinc-800/50 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.1)] dark:shadow-[0_8px_40px_-12px_rgba(0,0,0,0.5)] rounded-[2rem] p-8 sm:p-10">
-
       {/* Header */}
       <div className="flex flex-col items-center mb-10 text-center space-y-4">
         <div className="w-20 h-20 bg-primary/10 rounded-2xl flex items-center justify-center mb-2">
@@ -243,7 +263,10 @@ const handleRegisterSubmit = async (e: React.FormEvent) => {
               <Input
                 id="phone"
                 value={phone}
-                onChange={(e) => { setPhone(e.target.value); clearError(); }}
+                onChange={(e) => {
+                  setPhone(e.target.value);
+                  clearError();
+                }}
                 className={`h-12 pr-12 text-lg tracking-widest rounded-xl ${error ? 'border-red-500' : ''}`}
                 placeholder="09123456789"
                 dir="ltr"
@@ -261,7 +284,15 @@ const handleRegisterSubmit = async (e: React.FormEvent) => {
 
           <div className="text-center text-sm text-zinc-500">
             قبلا ثبت‌نام کرده‌اید؟{' '}
-            <button type="button" onClick={() => { setStep('PASSWORD'); clearError(); }} className="text-primary font-medium hover:underline">
+            <button
+              type="button"
+              onClick={() => {
+                clearError();
+                if (!validatePhone()) return;
+                setStep('PASSWORD');
+              }}
+              className="text-primary font-medium hover:underline"
+            >
               ورود با رمز عبور
             </button>
           </div>
@@ -307,8 +338,15 @@ const handleRegisterSubmit = async (e: React.FormEvent) => {
           </div>
 
           <Button
-            type="button" variant="outline" size="lg" className="w-full h-12 rounded-xl"
-            onClick={() => { setStep('PHONE'); setOtpValue(''); clearError(); }}
+            type="button"
+            variant="outline"
+            size="lg"
+            className="w-full h-12 rounded-xl"
+            onClick={() => {
+              setStep('PHONE');
+              setOtpValue('');
+              clearError();
+            }}
           >
             <ArrowRight className="ml-2 h-4 w-4" />
             بازگشت
@@ -327,7 +365,10 @@ const handleRegisterSubmit = async (e: React.FormEvent) => {
                 id="password"
                 type={showPassword ? 'text' : 'password'}
                 value={password}
-                onChange={(e) => { setPassword(e.target.value); clearError(); }}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  clearError();
+                }}
                 className="h-12 pr-12 pl-12 rounded-xl"
                 placeholder="رمز عبور خود را وارد کنید"
                 dir="ltr"
@@ -350,8 +391,15 @@ const handleRegisterSubmit = async (e: React.FormEvent) => {
               {loading ? 'در حال ورود...' : 'ورود به حساب'}
             </Button>
             <Button
-              type="button" variant="outline" size="lg" className="w-full h-12 rounded-xl"
-              onClick={() => { setStep('PHONE'); setPassword(''); clearError(); }}
+              type="button"
+              variant="outline"
+              size="lg"
+              className="w-full h-12 rounded-xl"
+              onClick={() => {
+                setStep('PHONE');
+                setPassword('');
+                clearError();
+              }}
             >
               <ArrowRight className="ml-2 h-4 w-4" />
               بازگشت
@@ -359,7 +407,14 @@ const handleRegisterSubmit = async (e: React.FormEvent) => {
           </div>
 
           <div className="text-center">
-            <button type="button" onClick={() => { setStep('PHONE'); clearError(); }} className="text-sm text-primary font-medium hover:underline">
+            <button
+              type="button"
+              onClick={() => {
+                setStep('PHONE');
+                clearError();
+              }}
+              className="text-sm text-primary font-medium hover:underline"
+            >
               ورود با کد تایید
             </button>
           </div>

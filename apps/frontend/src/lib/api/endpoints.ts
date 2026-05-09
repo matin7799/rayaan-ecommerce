@@ -62,7 +62,6 @@ export const API_ENDPOINTS = {
   PAYMENT: {
     CREATE: '/payments',
     INITIATE: '/payments/initiate',
-    VERIFY: (id: string) => `/payments/${id}/verify`,
     CALLBACK: '/payments/callback',
     ADMIN_ALL: '/payments/admin/all',
   },

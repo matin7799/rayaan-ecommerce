@@ -16,11 +16,26 @@ export default async function BlogPage({
 }) {
   const { page: pageParam } = await searchParams;
   const page = Number(pageParam) || 1;
-
-  const { items: blogs, meta } = await blogService.getPublishedBlogs({
+  let blogs: Awaited<ReturnType<typeof blogService.getPublishedBlogs>>['items'] =
+    [];
+  let meta: Awaited<ReturnType<typeof blogService.getPublishedBlogs>>['meta'] = {
+    total: 0,
     page,
     limit: 12,
-  });
+    totalPages: 0,
+  };
+
+  try {
+    const response = await blogService.getPublishedBlogs({
+      page,
+      limit: 12,
+    });
+    blogs = response.items;
+    meta = response.meta;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    console.warn(`Failed to load blog listing: ${message}`);
+  }
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-7xl">

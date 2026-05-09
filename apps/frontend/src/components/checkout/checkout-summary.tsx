@@ -34,9 +34,19 @@ export function CheckoutSummary({ cart, shippingCost, selectedShippingMethod, on
                   تعداد: {item.quantity}
                 </p>
               </div>
-              <span className="font-semibold text-foreground">
-                {((Number(item.price) || 0) * (Number(item.quantity) || 0)).toLocaleString()} تومان
-              </span>
+              <div className="text-left">
+                {Number(item.originalPrice) > Number(item.price) && (
+                  <p className="text-[11px] text-muted-foreground line-through">
+                    {(
+                      (Number(item.originalPrice) || 0) * (Number(item.quantity) || 0)
+                    ).toLocaleString()}{' '}
+                    تومان
+                  </p>
+                )}
+                <span className="font-semibold text-foreground">
+                  {((Number(item.price) || 0) * (Number(item.quantity) || 0)).toLocaleString()} تومان
+                </span>
+              </div>
             </div>
           ))}
         </div>

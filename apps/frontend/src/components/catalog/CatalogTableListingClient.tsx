@@ -236,9 +236,9 @@ export function CatalogTableListingClient() {
       {!isLoading && !isError && data ? (
         <>
           <div className="hidden rounded-2xl border bg-background p-2 md:block">
-            <Table>
-              <TableHeader>
-                <TableRow>
+            <Table dir='rtl'>
+              <TableHeader dir='rtl'>
+                <TableRow dir='rtl'>
                   <TableHead>تصویر</TableHead>
                   <TableHead>SKU</TableHead>
                   <TableHead>نام</TableHead>

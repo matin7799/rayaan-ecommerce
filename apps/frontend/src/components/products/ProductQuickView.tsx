@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import {
@@ -24,6 +24,9 @@ import { cn } from '@/lib/utils';
 import { cartService } from '@/services/cart.service';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { apiClient } from '@/services/api-client';
+import { useAuthStore } from '@/lib/store/auth-store';
+import { authService, userService } from '@/services';
 
 interface ProductQuickViewProps {
   product: ProductCardItem | null;
@@ -35,21 +38,93 @@ export function ProductQuickView({ product, isOpen, onClose }: ProductQuickViewP
   const PLACEHOLDER_IMAGE = 'https://ranew.s3.ir-thr-at1.arvanstorage.ir/placeholder.png';
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [cartStatus, setCartStatus] = useState<'idle' | 'loading' | 'success'>('idle');
+  const [resolvedProduct, setResolvedProduct] = useState<ProductCardItem | null>(product);
   const queryClient = useQueryClient();
+  const { accessToken, sessionChecked, setAuth, setTokens, logout, setSessionChecked } = useAuthStore();
 
-  if (!product) return null;
+  const resolveVariantId = () => {
+    if (!resolvedProduct) return undefined;
+    if (resolvedProduct.defaultVariantId) return resolvedProduct.defaultVariantId;
+    if (resolvedProduct.hasMultipleVariants) return undefined;
+    return resolvedProduct.id;
+  };
+
+  const ensureSession = async () => {
+    if (accessToken) return true;
+    if (!sessionChecked) return null;
+
+    try {
+      const refresh = await authService.refreshSession();
+      const tokens = refresh.data;
+      if (!tokens?.accessToken || !tokens?.refreshToken) return false;
+      setTokens(tokens.accessToken, tokens.refreshToken);
+      const user = await userService.getProfile();
+      setAuth(user, tokens.accessToken, tokens.refreshToken);
+      setSessionChecked(true);
+      return true;
+    } catch {
+      logout();
+      return false;
+    }
+  };
+
+  useEffect(() => {
+    setResolvedProduct(product);
+  }, [product]);
+
+  useEffect(() => {
+    if (!isOpen || !product?.slug) return;
+
+    const loadDetails = async () => {
+      try {
+        const response = await apiClient.get(`/catalog/products/${product.slug}`);
+        const payload = response.data;
+        const detail = payload?.data?.data ?? payload?.data ?? payload;
+        const attributes = Array.isArray(detail?.attributes) ? detail.attributes : [];
+        const gallery = Array.isArray(detail?.media?.gallery) ? detail.media.gallery : [];
+        const images = gallery
+          .slice()
+          .sort(
+            (left: { order?: number }, right: { order?: number }) =>
+              (left?.order ?? 0) - (right?.order ?? 0),
+          )
+          .map((media: { url?: string }) => media?.url)
+          .filter((url: string | undefined): url is string => Boolean(url));
+
+        setResolvedProduct((prev) =>
+          prev
+            ? {
+                ...prev,
+                images: images.length > 0 ? images : prev.images,
+                specs: attributes.map((attribute: { key?: string; value?: string }) => ({
+                  label: attribute?.key ?? '-',
+                  value: attribute?.value ?? '-',
+                })),
+              }
+            : prev,
+        );
+      } catch {
+        // Keep base card data if detail fetch fails.
+      }
+    };
+
+    loadDetails();
+  }, [isOpen, product?.slug]);
+
+  if (!resolvedProduct) return null;
+  const productData = resolvedProduct;
   const safeThumbnail =
-    product.thumbnail && product.thumbnail.trim().length > 0
-      ? product.thumbnail
+    productData.thumbnail && productData.thumbnail.trim().length > 0
+      ? productData.thumbnail
       : PLACEHOLDER_IMAGE;
-  const safePrice = Number.isFinite(product.price) ? product.price : 0;
+  const safePrice = Number.isFinite(productData.price) ? productData.price : 0;
   const safeDiscountPrice =
-    typeof product.discountPrice === 'number' && product.discountPrice > 0
-      ? product.discountPrice
+    typeof productData.discountPrice === 'number' && productData.discountPrice > 0
+      ? productData.discountPrice
       : undefined;
 
   const images = [
-    ...(product.images?.filter((image) => !!image?.trim()) ?? []),
+    ...(productData.images?.filter((image) => !!image?.trim()) ?? []),
   ];
   if (images.length === 0) {
     images.push(safeThumbnail);
@@ -65,14 +140,20 @@ export function ProductQuickView({ product, isOpen, onClose }: ProductQuickViewP
 
   const handleAddToCart = async () => {
     if (cartStatus !== 'idle') return;
-    if (!product.defaultVariantId) {
+    const variantId = resolveVariantId();
+    if (!variantId) {
       toast.info('برای افزودن این محصول، ابتدا گزینه/واریانت را در صفحه محصول انتخاب کنید');
+      return;
+    }
+
+    const hasSession = await ensureSession();
+    if (hasSession === null) {
+      toast.info('در حال بررسی نشست کاربری... لطفاً دوباره تلاش کنید');
       return;
     }
 
     setCartStatus('loading');
     try {
-      const variantId = product.defaultVariantId;
       await cartService.addToCart({ variantId, quantity: 1 });
       await queryClient.invalidateQueries({ queryKey: ['cart'] });
       setCartStatus('success');
@@ -98,7 +179,7 @@ export function ProductQuickView({ product, isOpen, onClose }: ProductQuickViewP
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-5xl sm:max-w-5xl md:max-w-5xl w-[95vw] p-0 overflow-hidden bg-white/95 dark:bg-zinc-950/95 backdrop-blur-xl border-zinc-200/60 dark:border-zinc-800/60 rounded-[2rem] gap-0 shadow-2xl [&>button]:hidden">
-        <DialogTitle className="sr-only">مشاهده سریع {product.title}</DialogTitle>
+        <DialogTitle className="sr-only">مشاهده سریع {productData.title}</DialogTitle>
 
         <div className="flex flex-col md:flex-row w-full h-[85vh] md:h-[650px] max-h-[90vh]">
           {/* بخش اسلایدر تصویر */}
@@ -109,7 +190,7 @@ export function ProductQuickView({ product, isOpen, onClose }: ProductQuickViewP
               <Image
                 key={currentImageIndex}
                 src={images[currentImageIndex]}
-                alt={`${product.title} - تصویر ${currentImageIndex + 1}`}
+                alt={`${productData.title} - تصویر ${currentImageIndex + 1}`}
                 fill
                 className="object-contain p-4 md:p-8 drop-shadow-2xl animate-in fade-in zoom-in-95 duration-500"
                 sizes="(max-width: 768px) 100vw, 50vw"
@@ -162,33 +243,33 @@ export function ProductQuickView({ product, isOpen, onClose }: ProductQuickViewP
             <div className="flex flex-col flex-grow p-5 md:p-8 lg:p-10">
               <div className="flex items-center justify-between mb-4">
                 <span className="text-xs md:text-sm font-bold tracking-wider text-zinc-500 dark:text-zinc-400 uppercase bg-zinc-100 dark:bg-zinc-900 px-3 py-1 md:px-4 md:py-1.5 rounded-full">
-                  {product.brand}
+                  {productData.brand}
                 </span>
                 <div className="flex items-center gap-1.5 text-amber-500 bg-amber-50 dark:bg-amber-500/10 px-2.5 py-1 md:px-3 md:py-1.5 rounded-xl">
                   <Star className="w-3.5 h-3.5 md:w-4 md:h-4 fill-current" />
-                  <span className="text-xs md:text-sm font-bold">{product.rating}</span>
+                  <span className="text-xs md:text-sm font-bold">{productData.rating}</span>
                   <span className="text-[10px] md:text-xs font-medium text-amber-600/70 dark:text-amber-500/70">
-                    ({product.reviewsCount} نظر)
+                    ({productData.reviewsCount} نظر)
                   </span>
                 </div>
               </div>
 
               <h2 className="text-xl md:text-2xl font-extrabold text-zinc-900 dark:text-white mb-3 leading-snug">
-                {product.title}
+                {productData.title}
               </h2>
 
               <p className="text-xs md:text-sm text-zinc-600 dark:text-zinc-400 mb-6 leading-relaxed">
-                {product.shortDescription ||
+                {productData.shortDescription ||
                   'توضیحات کوتاهی برای این محصول ثبت نشده است. این محصول با ضمانت اصالت کالا و بهترین کیفیت به دست شما می‌رسد.'}
               </p>
 
-              {product.specs && product.specs.length > 0 && (
+              {productData.specs && productData.specs.length > 0 && (
                 <div className="mb-8">
                   <h3 className="text-xs md:text-sm font-bold text-zinc-900 dark:text-white mb-3 flex items-center gap-2">
                     <Cpu className="w-3.5 h-3.5 md:w-4 md:h-4 text-teal-500" /> مشخصات کلیدی
                   </h3>
                   <div className="grid grid-cols-2 gap-2 md:gap-3">
-                    {product.specs.slice(0, 6).map((spec, i) => (
+                    {productData.specs.slice(0, 6).map((spec, i) => (
                       <div
                         key={i}
                         className="flex flex-col p-2.5 md:p-3 rounded-xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-100 dark:border-zinc-800/80 hover:border-teal-100 dark:hover:border-teal-900/50 transition-colors"
@@ -271,7 +352,7 @@ export function ProductQuickView({ product, isOpen, onClose }: ProductQuickViewP
                     )}
                   </Button>
                   <Link
-                    href={`/products/${product.slug}`}
+                    href={`/products/${productData.slug}`}
                     className="flex items-center justify-center w-full px-6"
                   >
                     <Button

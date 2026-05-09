@@ -8,5 +8,8 @@
     "dev": "pnpm run dev:frontend & pnpm run dev:backend",
     "build:frontend": "pnpm --filter frontend build",
     "build:backend": "pnpm --filter backend build"
+  },
+  "devDependencies": {
+    "ts-prune": "^0.10.3"
   }
 }

@@ -1,6 +1,9 @@
 import { Suspense } from 'react';
 import { CatalogListingClient } from '@/components/catalog/CatalogListingClient';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export const metadata = {
   title: 'فروشگاه | تمام محصولات',
   description: 'جستجو و خرید انواع محصولات با بهترین قیمت',

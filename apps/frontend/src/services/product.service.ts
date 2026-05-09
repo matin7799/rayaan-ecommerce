@@ -312,11 +312,19 @@ const normalizeProductsParams = (params: ProductsQueryParams): Record<string, un
 export const productService = {
   getProducts: async (
     params: ProductsQueryParams = {},
+    attributionSource?: 'torob',
   ): Promise<PaginatedResponse<ProductListItem>> => {
     const normalizedParams = normalizeProductsParams(params);
     const queryString = buildQueryString(normalizedParams);
     const { data } = await apiClient.get<ApiResponse<CatalogResponse>>(
       `${API_ENDPOINTS.PRODUCTS.LIST}${queryString}`,
+      attributionSource
+        ? {
+            headers: {
+              'X-Attribution-Source': attributionSource,
+            },
+          }
+        : undefined,
     );
     const catalog = data.data;
 
@@ -326,9 +334,19 @@ export const productService = {
     };
   },
 
-  getProductBySlug: async (slug: string): Promise<ProductDetail> => {
+  getProductBySlug: async (
+    slug: string,
+    attributionSource?: 'torob',
+  ): Promise<ProductDetail> => {
     const { data } = await apiClient.get<ApiResponse<CatalogDetailResponse>>(
       API_ENDPOINTS.PRODUCTS.DETAIL(slug),
+      attributionSource
+        ? {
+            headers: {
+              'X-Attribution-Source': attributionSource,
+            },
+          }
+        : undefined,
     );
     return mapCatalogItemToProductListItem(data.data);
   },

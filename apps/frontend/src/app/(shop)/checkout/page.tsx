@@ -21,17 +21,18 @@ import { paymentService } from '@/services/payment.service';
 export default function CheckoutPage() {
   const router = useRouter();
   const accessToken = useAuthStore((state) => state.accessToken);
+  const sessionChecked = useAuthStore((state) => state.sessionChecked);
   const [selectedAddressId, setSelectedAddressId] = useState<string>('');
   const [selectedShippingMethodId, setSelectedShippingMethodId] = useState<string>('');
   const [paymentMethod, setPaymentMethod] = useState<'online' | 'cash_on_delivery'>('online');
 
   // Redirect to login if not authenticated (only after hydration)
   useEffect(() => {
-    if (typeof window !== 'undefined' && !accessToken) {
+    if (typeof window !== 'undefined' && sessionChecked && !accessToken) {
       toast.error('برای ثبت سفارش ابتدا وارد شوید');
       router.push('/login?redirect=/checkout');
     }
-  }, [accessToken, router]);
+  }, [accessToken, router, sessionChecked]);
 
   // Fetch addresses
   const { data: addresses, isLoading: isLoadingAddresses } = useQuery({
@@ -122,6 +123,16 @@ export default function CheckoutPage() {
     (shippingMethods && shippingMethods.length > 0 ? shippingMethods[0].id : '');
 
   // Redirect is handled by useEffect
+  if (!sessionChecked) {
+    return (
+      <div className="container mx-auto px-4 py-8 max-w-7xl">
+        <div className="flex items-center justify-center py-24">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </div>
+    );
+  }
+
   if (!accessToken) {
     return null;
   }

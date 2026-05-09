@@ -15,6 +15,8 @@ import { cn } from '@/lib/utils';
 import { ProductQuickView } from './ProductQuickView';
 import { cartService } from '@/services/cart.service';
 import { ProductCardItem } from '@/types/catalog.types';
+import { useAuthStore } from '@/lib/store/auth-store';
+import { authService, userService } from '@/services';
 
 
 const cardVariants = cva(
@@ -142,6 +144,36 @@ export function ProductCard({
   const [isQuickViewOpen, setIsQuickViewOpen] = useState(false);
   const queryClient = useQueryClient();
   const router = useRouter();
+  const { accessToken, sessionChecked, setAuth, setTokens, logout, setSessionChecked } = useAuthStore();
+
+  const resolveVariantId = () => {
+    if (product.defaultVariantId) return product.defaultVariantId;
+    if (product.hasMultipleVariants) return undefined;
+    return product.id;
+  };
+
+  const ensureSession = async () => {
+    if (accessToken) return true;
+    if (!sessionChecked) return null;
+
+    try {
+      const refresh = await authService.refreshSession();
+      const tokens = refresh.data;
+
+      if (!tokens?.accessToken || !tokens?.refreshToken) {
+        return false;
+      }
+
+      setTokens(tokens.accessToken, tokens.refreshToken);
+      const user = await userService.getProfile();
+      setAuth(user, tokens.accessToken, tokens.refreshToken);
+      setSessionChecked(true);
+      return true;
+    } catch {
+      logout();
+      return false;
+    }
+  };
 
   const handleAddToCart = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -152,17 +184,22 @@ export function ProductCard({
       return;
     }
 
-    if (!product.defaultVariantId) {
+    const variantId = resolveVariantId();
+    if (!variantId) {
       toast.info('لطفاً ابتدا واریانت مورد نظر را انتخاب کنید');
       router.push(`/products/${product.slug}`);
+      return;
+    }
+
+    const hasSession = await ensureSession();
+    if (hasSession === null) {
+      toast.info('در حال بررسی نشست کاربری... لطفاً دوباره تلاش کنید');
       return;
     }
 
     setIsAddingToCart(true);
 
     try {
-      const variantId = product.defaultVariantId;
-
       await cartService.addToCart({
         variantId,
         quantity: 1,

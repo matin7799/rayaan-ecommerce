@@ -13,7 +13,7 @@ import { cartService } from '@/services/cart.service';
 export default function CartPage() {
   const queryClient = useQueryClient();
   const router = useRouter();
-  const { accessToken } = useAuthStore();
+  const { accessToken, sessionChecked } = useAuthStore();
 
   // Fetch cart
   const { data: cart, isLoading } = useQuery({
@@ -73,6 +73,9 @@ export default function CartPage() {
   };
 
   const handleCheckout = () => {
+    if (!sessionChecked) {
+      return;
+    }
     if (!accessToken) {
       toast.info('برای ثبت سفارش ابتدا وارد شوید');
       router.push('/login?redirect=/checkout');
@@ -81,7 +84,7 @@ export default function CartPage() {
     }
   };
 
-  if (isLoading) {
+  if (!sessionChecked || isLoading) {
     return (
       <div className="container mx-auto px-4 py-8 max-w-7xl">
         <div className="flex items-center justify-center py-24">
@@ -131,6 +134,7 @@ export default function CartPage() {
                   id: item.variantId,
                   title: item.productTitle,
                   price: item.price,
+                  originalPrice: item.originalPrice,
                   image: item.image || '/placeholder.png',
                   quantity: item.quantity,
                   maxQuantity: item.maxStock,

@@ -20,7 +20,7 @@ export function Header({ showHero = false }: HeaderProps) {
   const [isScrolled, setIsScrolled] = useState(false);
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  const { user, accessToken, logout } = useAuthStore();
+  const { user, accessToken, logout, sessionChecked } = useAuthStore();
   const router = useRouter();
 
   useEffect(() => {
@@ -109,7 +109,7 @@ export function Header({ showHero = false }: HeaderProps) {
 
             <CartDropdown />
 
-            {accessToken && user ? (
+            {sessionChecked && accessToken && user ? (
               <div className="hidden sm:flex items-center gap-2">
                 <Link
                   href="/dashboard"
@@ -130,7 +130,7 @@ export function Header({ showHero = false }: HeaderProps) {
                   <LogOut className="w-4 h-4" />
                 </Button>
               </div>
-            ) : (
+            ) : sessionChecked ? (
               <Link
                 href="/login"
                 className="hidden align-middle sm:flex rounded-2xl bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-200 text-white dark:text-gray-900 hover:from-[#008080] hover:to-[#006666] dark:hover:from-[#008080] dark:hover:to-[#006666] dark:hover:text-white transition-all h-11 px-6 shadow-lg hover:shadow-xl hover:-translate-y-0.5 font-medium border border-transparent dark:border-white/10"
@@ -138,6 +138,8 @@ export function Header({ showHero = false }: HeaderProps) {
                 <User className="w-4 h-4 ml-2 my-auto" />
                 <p className="my-auto">ورود | ثبت نام</p>
               </Link>
+            ) : (
+              <div className="hidden sm:flex h-11 w-28 rounded-2xl bg-white/30 dark:bg-gray-800/30 border border-white/40 dark:border-gray-700/50 animate-pulse" />
             )}
           </div>
         </div>
