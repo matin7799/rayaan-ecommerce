@@ -55,14 +55,19 @@ function Create-DeploymentZip($appName, $dockerfilePath, $zipName) {
     }
     Copy-Item -Path $targetDockerfile -Destination (Join-Path $stagingAppDir "Dockerfile") -Force
     
-    # 3. Create ZIP archive
+    # 3. Create ZIP archive using bsdtar for Linux compatibility (avoids backslash path issues)
     $zipPath = Join-Path $rootDir $zipName
     if (Test-Path $zipPath) {
         Remove-Item $zipPath -Force
     }
     
-    Write-Host "Compressing files into $zipName..." -ForegroundColor Yellow
-    Compress-Archive -Path (Join-Path $stagingAppDir "*") -DestinationPath $zipPath -Force
+    Write-Host "Compressing files into $zipName using bsdtar..." -ForegroundColor Yellow
+    Push-Location $stagingAppDir
+    try {
+        tar -a -c -f $zipPath *
+    } finally {
+        Pop-Location
+    }
     
     Write-Host "Success! Package created: $zipName" -ForegroundColor Green
 }
