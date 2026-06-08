@@ -1,4 +1,4 @@
-FROM docker.arvancloud.ir/library/node:20-alpine AS base
+FROM node:20-alpine AS base
 RUN apk add --no-cache caddy
 RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 ENV PNPM_HOME="/pnpm"
@@ -18,7 +18,7 @@ ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 RUN pnpm --filter backend build
 RUN pnpm --filter frontend build
 
-FROM docker.arvancloud.ir/library/node:20-alpine AS runner
+FROM node:20-alpine AS runner
 RUN apk add --no-cache caddy
 RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 ENV PNPM_HOME="/pnpm"
