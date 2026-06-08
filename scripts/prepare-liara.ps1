@@ -67,11 +67,8 @@ function Create-DeploymentZip($appName, $dockerfilePath, $zipName) {
     Write-Host "Success! Package created: $zipName" -ForegroundColor Green
 }
 
-# Create backend package
-Create-DeploymentZip -appName "backend" -dockerfilePath "docker/backend.Dockerfile" -zipName "rayaan-backend-deploy.zip"
-
-# Create frontend package
-Create-DeploymentZip -appName "frontend" -dockerfilePath "docker/frontend.Dockerfile" -zipName "rayaan-frontend-deploy.zip"
+# Create combined package
+Create-DeploymentZip -appName "combined" -dockerfilePath "Dockerfile" -zipName "rayaan-deploy.zip"
 
 # Cleanup staging directory
 if (Test-Path $stagingDir) {
@@ -79,7 +76,7 @@ if (Test-Path $stagingDir) {
 }
 
 Write-Host "`n==================================================" -ForegroundColor Green
-Write-Host "All deployment packages are ready!" -ForegroundColor Green
-Write-Host "1. Upload rayaan-backend-deploy.zip to your Liara Backend App (Port: 3002)" -ForegroundColor Green
-Write-Host "2. Upload rayaan-frontend-deploy.zip to your Liara Frontend App (Port: 3001)" -ForegroundColor Green
+Write-Host "Deployment package is ready!" -ForegroundColor Green
+Write-Host "1. Upload rayaan-deploy.zip to your Liara App" -ForegroundColor Green
+Write-Host "2. Expose the port in your Liara panel settings (port 80)" -ForegroundColor Green
 Write-Host "==================================================" -ForegroundColor Green

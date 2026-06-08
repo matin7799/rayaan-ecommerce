@@ -1,0 +1,9 @@
+:{$PORT:80} {
+    encode gzip zstd
+    header Content-Security-Policy "upgrade-insecure-requests;"
+
+    @api path /api/*
+    reverse_proxy @api localhost:3002
+
+    reverse_proxy localhost:3001
+}
