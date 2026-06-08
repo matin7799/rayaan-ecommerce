@@ -3,7 +3,7 @@ import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { Inject } from '@nestjs/common';
 import Redis from 'ioredis';
-import { REDIS_CLIENT } from '../shared/redis/redis.module';
+import { REDIS_CLIENT } from '../shared/redis/redis.constants';
 
 @Controller('health')
 export class HealthController {

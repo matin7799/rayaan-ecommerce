@@ -221,4 +221,31 @@ export const cartService = {
     await apiClient.delete(API_ENDPOINTS.CART.CLEAR);
     clearStoredCart();
   },
+
+  /**
+   * Get guest cart items from local storage
+   */
+  getStoredCart: (): Cart | null => {
+    return getStoredCart();
+  },
+
+  /**
+   * Clear guest cart from local storage
+   */
+  clearStoredCart: (): void => {
+    clearStoredCart();
+  },
+
+  /**
+   * Merge guest cart with user cart
+   */
+  mergeCart: async (items: Array<{ variantId: string; quantity: number }>): Promise<Cart> => {
+    const { data } = await apiClient.post<CartEnvelope>(
+      API_ENDPOINTS.CART.MERGE,
+      { items }
+    );
+    const cart = extractCart(data);
+    setStoredCart(cart);
+    return cart;
+  },
 };

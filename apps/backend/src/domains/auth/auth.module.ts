@@ -10,10 +10,13 @@ import { AuthService } from './auth.service';
 import { User } from '../users/entities/user.entity';
 import { UsersRepository } from '../users/users.repository';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { SmsModule } from '../../providers/sms/sms.module';
+import { AuthBlacklistService } from './auth-blacklist.service';
 
 @Module({
   imports: [
     ConfigModule,
+    SmsModule,
     PassportModule.register({ defaultStrategy: 'jwt' }),
     TypeOrmModule.forFeature([User]),
     JwtModule.registerAsync({
@@ -29,6 +32,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
     AuthService,
     JwtStrategy,
     UsersRepository,
+    AuthBlacklistService,
     {
       provide: 'REDIS_CLIENT',
       inject: [ConfigService],
@@ -42,6 +46,6 @@ import { JwtStrategy } from './strategies/jwt.strategy';
       },
     },
   ],
-  exports: [AuthService],
+  exports: [AuthService, AuthBlacklistService],
 })
 export class AuthModule {}

@@ -39,7 +39,7 @@ export class DatabaseService implements TypeOrmOptionsFactory {
         max: 20, // Maximum number of connections in pool
         min: 5, // Minimum number of connections in pool
         idleTimeoutMillis: 30000, // Close idle connections after 30 seconds
-        connectionTimeoutMillis: 5000, // Connection timeout 5 seconds
+        connectionTimeoutMillis: 30000, // Connection timeout 30 seconds
         statement_timeout: 10000, // Query timeout 10 seconds
       },
 

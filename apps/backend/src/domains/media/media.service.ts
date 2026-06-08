@@ -7,6 +7,12 @@ import { Media, MediaType, MediaUsage } from './entities/media.entity';
 import { LiaraStorageService } from '../../shared/storage/liara-storage.service';
 import { RegisterMediaByUrlDto } from './dto/register-media-by-url.dto';
 import { ProductMedia } from '../catalog/entities/product-media.entity';
+import {
+  extractFilenameFromUrl,
+  getMediaType,
+  getMediaTypeFromMimeType,
+  getMimeTypeFromUrl,
+} from './media-utils';
 
 @Injectable()
 export class MediaService {
@@ -30,7 +36,7 @@ export class MediaService {
       file,
       folder,
     );
-    const mediaType = this.getMediaType(file.mimetype);
+    const mediaType = getMediaType(file.mimetype);
 
     const media = this.mediaRepository.create({
       filename,
@@ -71,9 +77,17 @@ export class MediaService {
   }
 
   async registerByUrl(dto: RegisterMediaByUrlDto): Promise<Media> {
-    const filename = this.extractFilenameFromUrl(dto.url);
-    const mimeType = this.getMimeTypeFromUrl(dto.url);
-    const detectedType = this.getMediaTypeFromMimeType(mimeType);
+    const existingMedia = await this.mediaRepository.findOne({
+      where: { url: dto.url },
+    });
+
+    if (existingMedia) {
+      return existingMedia;
+    }
+
+    const filename = extractFilenameFromUrl(dto.url);
+    const mimeType = getMimeTypeFromUrl(dto.url);
+    const detectedType = getMediaTypeFromMimeType(mimeType);
 
     const media = this.mediaRepository.create({
       url: dto.url,
@@ -320,81 +334,5 @@ export class MediaService {
     for (let index = 0; index < mediaIds.length; index++) {
       await this.mediaRepository.update(mediaIds[index], { order: index });
     }
-  }
-
-  private extractFilenameFromUrl(url: string): string {
-    try {
-      const parsedUrl = new URL(url);
-      const pathname = parsedUrl.pathname;
-      const rawFilename = pathname.substring(pathname.lastIndexOf('/') + 1);
-
-      if (!rawFilename) {
-        return `remote-media-${Date.now()}`;
-      }
-
-      return decodeURIComponent(rawFilename);
-    } catch {
-      return `remote-media-${Date.now()}`;
-    }
-  }
-
-  private getMimeTypeFromUrl(url: string): string {
-    try {
-      const parsedUrl = new URL(url);
-      const pathname = parsedUrl.pathname.toLowerCase();
-      const extension = pathname.split('.').pop();
-
-      switch (extension) {
-        case 'jpg':
-        case 'jpeg':
-          return 'image/jpeg';
-        case 'png':
-          return 'image/png';
-        case 'gif':
-          return 'image/gif';
-        case 'webp':
-          return 'image/webp';
-        case 'svg':
-          return 'image/svg+xml';
-        case 'mp4':
-          return 'video/mp4';
-        case 'webm':
-          return 'video/webm';
-        case 'pdf':
-          return 'application/pdf';
-        default:
-          return 'application/octet-stream';
-      }
-    } catch {
-      return 'application/octet-stream';
-    }
-  }
-
-  private getMediaTypeFromMimeType(mimeType: string): MediaType {
-    if (mimeType.startsWith('image/')) {
-      return MediaType.IMAGE;
-    }
-
-    if (mimeType.startsWith('video/')) {
-      return MediaType.VIDEO;
-    }
-
-    if (mimeType === 'application/pdf') {
-      return MediaType.DOCUMENT;
-    }
-
-    return MediaType.IMAGE;
-  }
-
-  private getMediaType(mimeType: string): MediaType {
-    if (mimeType.startsWith('image/')) {
-      return MediaType.IMAGE;
-    }
-
-    if (mimeType.startsWith('video/')) {
-      return MediaType.VIDEO;
-    }
-
-    return MediaType.DOCUMENT;
   }
 }

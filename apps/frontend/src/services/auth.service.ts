@@ -81,12 +81,14 @@ export const authService = {
     return data;
   },
 
-  /**
-   * خروج از حساب کاربری
-   */
   logout: async (): Promise<void> => {
-    // TODO: اگر endpoint خروج در بک‌اند وجود دارد، اینجا فراخوانی شود
-    // فعلاً فقط پاک کردن توکن‌ها از localStorage کافی است
+    try {
+      const { useAuthStore } = await import('@/lib/store/auth-store');
+      const refreshToken = useAuthStore.getState().refreshToken || '';
+      await apiClient.post(API_ENDPOINTS.AUTH.LOGOUT, { refreshToken });
+    } catch (error) {
+      console.error('Failed to log out from backend:', error);
+    }
   },
 
   refreshSession: async (): Promise<LoginResponse> => {

@@ -1,29 +1,58 @@
 'use client';
 
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { orderService, type Order } from '@/services/order.service';
-import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { useAuthStore } from '@/lib/store/auth-store';
+import { Input } from '@/components/ui/input';
+import { AdminOrdersStats } from './AdminOrdersStats';
+import { AdminCancelRequestsList } from './AdminCancelRequestsList';
+import { AdminOrdersTable } from './AdminOrdersTable';
+import { AdminOrderStatusDialog } from './AdminOrderStatusDialog';
+import { Loader2, ShoppingBag, Search, Filter } from 'lucide-react';
 
-const ORDER_STATUSES: Order['status'][] = [
-  'PENDING',
-  'PAID',
-  'SHIPPED',
-  'DELIVERED',
-  'CANCELLED',
-];
+const ORDER_STATUSES: Order['status'][] = ['PENDING', 'PAID', 'SHIPPED', 'DELIVERED', 'CANCELLED'];
+
+const statusLabel: Record<Order['status'], string> = {
+  PENDING: 'در انتظار پرداخت',
+  PAID: 'پرداخت شده',
+  SHIPPED: 'ارسال شده',
+  DELIVERED: 'تحویل داده شده',
+  CANCELLED: 'لغو شده',
+};
+
+function normalizeShippingAddress(address: Order['shipping_address']) {
+  if (!address) return null;
+  if (typeof address === 'object') return address as Record<string, unknown>;
+  try { return JSON.parse(String(address)) as Record<string, unknown>; } catch { return null; }
+}
+
+function getOrderItemDisplay(item: Order['items'][number]) {
+  const raw = item as unknown as Record<string, unknown>;
+  return {
+    key: String(raw.id ?? raw.variantId ?? raw.variant_id ?? raw.product_id ?? 'item'),
+    title: String(raw.productTitle ?? raw.product_title ?? 'محصول'),
+    sku: String(raw.variantSku ?? raw.variant_sku ?? raw.option_name ?? '-'),
+    quantity: Number(raw.quantity ?? 0),
+    unitPrice: Number(raw.price ?? raw.unit_price ?? 0),
+    subtotal: Number(raw.subtotal ?? raw.total_price ?? 0),
+  };
+}
 
 export default function AdminOrdersPage() {
+  const { user } = useAuthStore();
+  const isPartner = ['partner', 'collaborator'].includes(String(user?.role ?? '').toLowerCase());
+
+  const [expandedOrderIds, setExpandedOrderIds] = useState<Record<string, boolean>>({});
+  const [statusDialogOrderId, setStatusDialogOrderId] = useState<string | null>(null);
+  const [nextStatus, setNextStatus] = useState<Order['status'] | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterStatus, setFilterStatus] = useState<string>('all');
   const queryClient = useQueryClient();
+
   const { data, isLoading } = useQuery({
     queryKey: ['admin-orders'],
-    queryFn: () => orderService.getAdminOrders({ page: 1, limit: 50 }),
+    queryFn: () => orderService.getAdminOrders({ page: 1, limit: 100 }),
   });
 
   const { data: cancelRequests = [] } = useQuery({
@@ -46,93 +75,99 @@ export default function AdminOrdersPage() {
     },
   });
 
-  if (isLoading) return <div>در حال بارگذاری...</div>;
+  const orders = data?.data ?? [];
+  const selectedOrder = statusDialogOrderId ? (orders.find((o) => o.id === statusDialogOrderId) ?? null) : null;
+
+  const totalSales = useMemo(
+    () => orders.filter(o => o.status !== 'CANCELLED').reduce((s, o) => s + Number(o.total_price) + Number(o.shipping_cost), 0),
+    [orders],
+  );
+  const pendingCount = useMemo(() => orders.filter(o => o.status === 'PENDING').length, [orders]);
+
+  if (isLoading) return (
+    <div className="flex items-center justify-center py-32">
+      <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+    </div>
+  );
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold">مدیریت سفارش‌ها (ادمین)</h1>
+    <div className="space-y-6 animate-in fade-in duration-500">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-black flex items-center gap-2">
+            <span className="p-2 bg-indigo-500/10 rounded-xl"><ShoppingBag className="w-6 h-6 text-indigo-600" /></span>
+            مدیریت سفارش‌ها
+          </h1>
+          <p className="text-sm text-zinc-500 mt-1">جزئیات کاربر، اقلام سفارش و عملیات وضعیت در یک صفحه</p>
+        </div>
       </div>
 
-      <section className="space-y-3">
-        <h2 className="font-semibold">درخواست‌های لغو پرداخت‌شده</h2>
-        {cancelRequests.length === 0 ? (
-          <p className="text-sm text-zinc-500">درخواستی وجود ندارد.</p>
-        ) : (
-          <div className="space-y-3">
-            {cancelRequests.map((request) => (
-              <div key={request.id} className="rounded-xl border p-4">
-                <p className="text-sm">سفارش: {request.order_id}</p>
-                <p className="text-sm">وضعیت: {request.status}</p>
-                <p className="text-sm text-zinc-600 mt-1">دلیل: {request.reason}</p>
-                {request.status === 'PENDING' ? (
-                  <div className="mt-3 flex gap-2">
-                    <Button
-                      size="sm"
-                      onClick={() =>
-                        reviewCancelRequestMutation.mutate({
-                          id: request.id,
-                          status: 'APPROVED',
-                        })
-                      }
-                    >
-                      تایید لغو
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() =>
-                        reviewCancelRequestMutation.mutate({
-                          id: request.id,
-                          status: 'REJECTED',
-                        })
-                      }
-                    >
-                      رد درخواست
-                    </Button>
-                  </div>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
+      {/* Stats */}
+      <AdminOrdersStats
+        ordersCount={orders.length}
+        cancelRequestsCount={cancelRequests.length}
+        totalSales={totalSales}
+        pendingCount={pendingCount}
+      />
 
-      <section className="space-y-3">
-        <h2 className="font-semibold">لیست سفارش‌ها</h2>
-        <div className="space-y-3">
-          {(data?.data ?? []).map((order) => (
-            <div key={order.id} className="rounded-xl border p-4">
-              <p className="text-sm">#{order.id.slice(0, 8)}</p>
-              <p className="text-sm text-zinc-500">
-                مبلغ: {(Number(order.total_price) + Number(order.shipping_cost)).toLocaleString('fa-IR')} تومان
-              </p>
-              <div className="mt-3 flex items-center gap-2">
-                <Select
-                  value={order.status}
-                  onValueChange={(value) =>
-                    updateStatusMutation.mutate({
-                      orderId: order.id,
-                      status: value as Order['status'],
-                    })
-                  }
-                >
-                  <SelectTrigger className="w-48">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ORDER_STATUSES.map((status) => (
-                      <SelectItem key={status} value={status}>
-                        {status}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+      {/* Cancel Requests Alert */}
+      <AdminCancelRequestsList
+        cancelRequests={cancelRequests}
+        onReview={(payload) => reviewCancelRequestMutation.mutate(payload)}
+      />
+
+      {/* Search + Filter Bar */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+          <Input
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="h-11 rounded-xl pr-10"
+            placeholder="جستجو بر اساس شناسه، نام یا موبایل..."
+          />
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Filter className="w-4 h-4 text-zinc-400 shrink-0" />
+          {[{ value: 'all', label: 'همه' }, ...ORDER_STATUSES.map(s => ({ value: s, label: statusLabel[s] }))].map(f => (
+            <button
+              key={f.value}
+              onClick={() => setFilterStatus(f.value)}
+              className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${filterStatus === f.value ? 'bg-indigo-600 text-white border-indigo-600' : 'border-zinc-200 dark:border-zinc-700 hover:border-indigo-400 text-zinc-600 dark:text-zinc-300'}`}
+            >
+              {f.label}
+            </button>
           ))}
         </div>
-      </section>
+      </div>
+
+      {/* Orders Table */}
+      <AdminOrdersTable
+        orders={orders}
+        expandedOrderIds={expandedOrderIds}
+        setExpandedOrderIds={setExpandedOrderIds}
+        isPartner={isPartner}
+        setStatusDialogOrderId={setStatusDialogOrderId}
+        setNextStatus={setNextStatus}
+        normalizeShippingAddress={normalizeShippingAddress}
+        getOrderItemDisplay={getOrderItemDisplay}
+        statusLabel={statusLabel}
+        searchQuery={searchQuery}
+        filterStatus={filterStatus}
+      />
+
+      {/* Status Change Dialog */}
+      <AdminOrderStatusDialog
+        statusDialogOrderId={statusDialogOrderId}
+        setStatusDialogOrderId={setStatusDialogOrderId}
+        nextStatus={nextStatus}
+        setNextStatus={setNextStatus}
+        selectedOrder={selectedOrder}
+        updateStatusMutation={updateStatusMutation}
+        ORDER_STATUSES={ORDER_STATUSES}
+        statusLabel={statusLabel}
+      />
     </div>
   );
 }

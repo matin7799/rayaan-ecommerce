@@ -4,3 +4,7 @@ dist
 .next
 coverage
 *.log
+*.tar
+*.tar.gz
+*.zip
+.pnpm-store

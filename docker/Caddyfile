@@ -1,5 +1,6 @@
 {$DOMAIN:localhost} {
   encode gzip zstd
+  header Content-Security-Policy "upgrade-insecure-requests;"
 
   @api path /api/*
   reverse_proxy @api backend:3002

@@ -4,19 +4,51 @@ import { ValidationPipe } from '@nestjs/common';
 import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
+import { SecurityCacheInterceptor } from './common/interceptors/security-cache.interceptor';
 import { GlobalExceptionFilter } from './common/filters/http-exception.filter';
 import helmet from 'helmet';
 import { Logger } from '@nestjs/common';
+import * as fs from 'fs';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
-  const app = await NestFactory.create(AppModule);
+
+  const keyPath = process.env['SSL_KEY_PATH'];
+  const certPath = process.env['SSL_CERT_PATH'];
+  const isHttps =
+    keyPath && certPath && fs.existsSync(keyPath) && fs.existsSync(certPath);
+
+  let app;
+  let port: number;
+
+  if (isHttps) {
+    logger.log(
+      `SSL Certificates found at [${keyPath}] and [${certPath}]. Bootstrapping HTTPS server on port 443...`,
+    );
+    const httpsOptions = {
+      key: fs.readFileSync(keyPath),
+      cert: fs.readFileSync(certPath),
+    };
+    app = await NestFactory.create(AppModule, { httpsOptions });
+    port = 443;
+  } else {
+    logger.log(
+      'SSL Certificates missing or not found. Falling back to HTTP on port 3002...',
+    );
+    app = await NestFactory.create(AppModule);
+    port = process.env['PORT'] ? Number(process.env['PORT']) : 3002;
+  }
+
+  // Configure trust proxy for ArvanCloud/upstream reverse proxies
+  const expressApp = app.getHttpAdapter().getInstance();
+  expressApp.set('trust proxy', true);
+  logger.log('Express trust proxy enabled successfully');
 
   // Security: Helmet middleware for security headers
   app.use(
     helmet({
       contentSecurityPolicy:
-        process.env.NODE_ENV === 'production' ? undefined : false,
+        process.env['NODE_ENV'] === 'production' ? undefined : false,
       crossOriginEmbedderPolicy: false,
     }),
   );
@@ -47,18 +79,21 @@ async function bootstrap() {
   });
 
   // Global response interceptor
-  app.useGlobalInterceptors(new ResponseInterceptor());
+  app.useGlobalInterceptors(
+    new ResponseInterceptor(),
+    new SecurityCacheInterceptor(),
+  );
 
   // Global exception filter
   app.useGlobalFilters(new GlobalExceptionFilter());
 
   // CORS configuration
-  const corsOrigins = process.env.CORS_ORIGINS
-    ? process.env.CORS_ORIGINS.split(',')
+  const corsOrigins = process.env['CORS_ORIGINS']
+    ? process.env['CORS_ORIGINS'].split(',')
     : ['http://localhost:3002', 'http://localhost:3001'];
 
   app.enableCors({
-    origin: process.env.NODE_ENV === 'production' ? corsOrigins : true,
+    origin: process.env['NODE_ENV'] === 'production' ? corsOrigins : true,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
@@ -73,11 +108,11 @@ async function bootstrap() {
   // Graceful shutdown
   app.enableShutdownHooks();
 
-  const port = process.env.PORT || 3002;
   await app.listen(port);
 
-  logger.log(`🚀 Server running on http://localhost:${port}/api/v1`);
-  logger.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
+  const protocol = isHttps ? 'https' : 'http';
+  logger.log(`🚀 Server running on ${protocol}://localhost:${port}/api/v1`);
+  logger.log(`📝 Environment: ${process.env['NODE_ENV'] || 'development'}`);
   logger.log(`🔒 CORS enabled for: ${corsOrigins.join(', ')}`);
 }
 

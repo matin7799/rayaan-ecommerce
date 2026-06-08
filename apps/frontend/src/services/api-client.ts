@@ -5,8 +5,32 @@ const API_BASE_URL =
   typeof window === 'undefined'
     ? (process.env.INTERNAL_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3002/api/v1')
     : (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3002/api/v1');
+
+// Simple in-memory response cache for GET requests (client-side only)
+const responseCache = new Map<string, { data: unknown; timestamp: number }>();
+const CACHE_TTL = 30_000; // 30 seconds
+const CACHE_MAX_SIZE = 50; // Max cached entries
+
+export const clearResponseCache = () => {
+  responseCache.clear();
+};
+
+
 const TOROB_ATTR_KEY = 'torob_attribution_until';
 const TOROB_ATTR_TTL_MS = 20 * 60 * 1000;
+
+// Only use cache on client-side, not during SSR
+const getCacheKey = (config: { method?: string; url?: string; params?: unknown }): string | null => {
+  if (typeof window === 'undefined') return null;
+  if (config.method !== 'get' && config.method !== 'GET') return null;
+  
+  // Exclude highly dynamic cart and checkout endpoints from client cache to ensure real-time UI updates
+  if (config.url?.includes('/cart') || config.url?.includes('cart') || config.url?.includes('/checkout') || config.url?.includes('checkout')) {
+    return null;
+  }
+  
+  return `${config.url}|${JSON.stringify(config.params ?? {})}`;
+};
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -48,7 +72,7 @@ const refreshTorobAttribution = (): boolean => {
   return false;
 };
 
-// Request Interceptor: read token directly from Zustand store (always in-memory, never stale)
+// Request Interceptor: read token directly from Zustand store + in-memory cache check
 apiClient.interceptors.request.use(
   (config) => {
     if (typeof window !== 'undefined') {
@@ -60,17 +84,50 @@ apiClient.interceptors.request.use(
       if (token && config.headers) {
         config.headers.Authorization = `Bearer ${token}`;
       }
+
+      // Return cached response for GET requests
+      const cacheKey = getCacheKey(config);
+      if (cacheKey && !config.headers?.['X-Bypass-Cache']) {
+        const cached = responseCache.get(cacheKey);
+        if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+          // Return cached response by rejecting with special flag
+          return Promise.reject({
+            __fromCache: true,
+            data: cached.data,
+            config,
+          } as any);
+        }
+      }
     }
     return config;
   },
   (error) => Promise.reject(error),
 );
 
-// Response Interceptor: only auto-logout on 401 for authenticated routes
-// DO NOT redirect or toast here — let individual call sites handle errors
+// Response Interceptor: cache successful GETs + auto-logout on 401
 apiClient.interceptors.response.use(
-  (response) => response,
-  async (error: AxiosError) => {
+  (response) => {
+    // Cache successful GET responses
+    const cacheKey = getCacheKey(response.config);
+    if (cacheKey) {
+      if (responseCache.size >= CACHE_MAX_SIZE) {
+        // Evict oldest entry
+        const oldestKey = responseCache.keys().next().value;
+        if (oldestKey) responseCache.delete(oldestKey);
+      }
+      responseCache.set(cacheKey, {
+        data: response.data,
+        timestamp: Date.now(),
+      });
+    }
+    return response;
+  },
+  async (error: AxiosError | any) => {
+    // Handle cache hits (they come through as rejected for bypassing request interceptor)
+    if (error?.__fromCache) {
+      return Promise.resolve({ data: error.data, config: error.config, status: 200, statusText: 'OK', headers: {}, request: {} });
+    }
+
     const status = error.response?.status;
     const isOnLoginPage =
       typeof window !== 'undefined' &&

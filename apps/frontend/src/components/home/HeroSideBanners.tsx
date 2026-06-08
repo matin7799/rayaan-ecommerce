@@ -50,6 +50,7 @@ export function HeroSideBanners() {
                 src={banner.imageUrl}
                 alt={banner.title}
                 fill
+                priority
                 className="object-cover transition-transform duration-700 group-hover:scale-110 opacity-60"
                 sizes="33vw"
               />

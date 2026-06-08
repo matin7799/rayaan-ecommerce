@@ -1,296 +1,195 @@
 'use client';
 
+import { useEffect, useMemo, useState } from 'react';
 import { useProducts } from '@/lib/hooks/queries/useProducts';
 import { ProductSlider } from './ProductSlider';
 import type { ProductListItem } from '@/services';
 
-function shouldHideSlider(
-  state: {
-    isLoading: boolean;
-    hasError: boolean;
-    items: unknown[] | undefined;
-  },
-): boolean {
-  // Hide only when request is settled, healthy, and definitely empty.
-  return !state.isLoading && !state.hasError && Array.isArray(state.items) && state.items.length === 0;
+import {
+  type SliderConfig,
+  type ProductQueryInput,
+  sliderConfigs,
+} from './HomeSlidersConfigs';
+
+type SliderState = {
+  isLoading: boolean;
+  hasError: boolean;
+  items: ProductListItem[];
+};
+
+
+function shouldHideSlider(state: SliderState): boolean {
+  return !state.isLoading && !state.hasError && state.items.length === 0;
 }
 
-function pickItems<T>(
-  primaryItems: T[] | undefined,
-  fallbackItems: T[] | undefined,
-): T[] | undefined {
+function pickItems<T>(primaryItems?: T[], fallbackItems?: T[]): T[] {
   if (Array.isArray(primaryItems) && primaryItems.length > 0) {
     return primaryItems;
   }
-  return fallbackItems;
+
+  if (Array.isArray(fallbackItems) && fallbackItems.length > 0) {
+    return fallbackItems;
+  }
+
+  return primaryItems ?? fallbackItems ?? [];
 }
 
-function normalizeText(value: string | undefined): string {
-  return (value ?? '').toLowerCase();
+
+
+function useIsMobile(breakpoint = 640): boolean {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(`(max-width: ${breakpoint - 1}px)`);
+
+    const update = () => {
+      setIsMobile(mediaQuery.matches);
+    };
+
+    update();
+
+    mediaQuery.addEventListener('change', update);
+
+    return () => {
+      mediaQuery.removeEventListener('change', update);
+    };
+  }, [breakpoint]);
+
+  return isMobile;
 }
 
-function isGamingLaptop(product: ProductListItem): boolean {
-  const text = [
-    product.title,
-    product.slug,
-    product.description,
-    product.shortDescription,
-    ...(product.categories?.map((c) => `${c.name} ${c.slug}`) ?? []),
-    ...(product.tags?.map((t) => `${t.name} ${t.slug}`) ?? []),
-  ]
-    .map(normalizeText)
-    .join(' ');
 
-  const isLaptopCategory = (product.categories ?? []).some((category) =>
-    normalizeText(`${category.name} ${category.slug}`).includes('laptop') ||
-    normalizeText(`${category.name} ${category.slug}`).includes('لپ'),
+
+function useResponsiveSliderLimit() {
+  const isMobile = useIsMobile();
+
+  return useMemo(
+    () => ({
+      isMobile,
+      listLimit: isMobile ? 6 : 12,
+      heavyLimit: isMobile ? 10 : 24,
+      searchLimit: isMobile ? 6 : 10,
+    }),
+    [isMobile]
   );
-  const isGaming = /gaming|گیم/.test(text);
-
-  return isLaptopCategory && isGaming;
 }
 
-// 1. Mobile Phones
+function useResolvedSliderProducts(config: SliderConfig) {
+  const { heavyLimit, listLimit, searchLimit } = useResponsiveSliderLimit();
+
+  const resolveLimit = (
+    queryFactory?: ((limit: number) => ProductQueryInput) | undefined
+  ): number => {
+    if (!queryFactory) return listLimit;
+
+    const query = queryFactory(listLimit);
+
+    if (!query) return listLimit;
+
+    if ('search' in query && query.search && !query.categorySlugs?.length) {
+      return searchLimit;
+    }
+
+    if (config.filter) {
+      return heavyLimit;
+    }
+
+    return listLimit;
+  };
+
+  const primaryLimit = resolveLimit(config.primaryQuery);
+  const fallbackLimit = resolveLimit(config.fallbackQuery);
+
+  const primaryQuery = useMemo(() => config.primaryQuery(primaryLimit), [config, primaryLimit]);
+
+  const fallbackQuery = useMemo(
+    () => (config.fallbackQuery ? config.fallbackQuery(fallbackLimit) : undefined),
+    [config, fallbackLimit]
+  );
+
+  const primary = useProducts(primaryQuery);
+  const fallback = useProducts(fallbackQuery);
+
+  const items = useMemo(() => {
+    const baseItems = pickItems(primary.data?.items, fallback.data?.items);
+    const filteredItems = config.filter ? baseItems.filter(config.filter) : baseItems;
+
+    return filteredItems.slice(0, config.slice ?? listLimit);
+  }, [primary.data?.items, fallback.data?.items, config, listLimit]);
+
+  const isLoading = primary.isLoading || fallback.isLoading;
+  const hasError = config.fallbackQuery ? primary.isError && fallback.isError : primary.isError;
+
+  return {
+    items,
+    isLoading,
+    hasError,
+  };
+}
+
+function CategorySliderSection({ config }: { config: SliderConfig }) {
+  const { items, isLoading, hasError } = useResolvedSliderProducts(config);
+
+  if (shouldHideSlider({ isLoading, hasError, items })) {
+    return null;
+  }
+
+  return (
+    <ProductSlider
+      title={config.title}
+      mobileTitle={config.mobileTitle}
+      subtitle={config.subtitle}
+      mobileSubtitle={config.mobileSubtitle}
+      viewAllLink={config.viewAllLink}
+      products={items}
+      isLoading={isLoading}
+      variant={config.variant}
+      mobilePeek={1.5}
+    />
+  );
+}
+
+
+
+
 export function MobilePhonesSlider() {
-  const primary = useProducts({ search: 'گوشی', limit: 10 });
-  const fallback = useProducts({ search: 'mobile', limit: 10 });
-  const items = pickItems(primary.data?.items, fallback.data?.items);
-  const isLoading = primary.isLoading || fallback.isLoading;
-  const hasError = primary.isError && fallback.isError;
-
-  if (shouldHideSlider({ isLoading, hasError, items })) {
-    return null;
-  }
-
-  return (
-    <ProductSlider
-      title="جدیدترین گوشی‌های موبایل"
-      subtitle="به‌روزترین اسمارت‌فون‌های بازار با بهترین قیمت"
-      viewAllLink="/products/category/mobile"
-      products={items}
-      isLoading={isLoading}
-      variant="default"
-    />
-  );
+  return <CategorySliderSection config={sliderConfigs.mobilePhones} />;
 }
 
-// 2. Gaming Laptops
 export function GamingLaptopSlider() {
-  const primary = useProducts({ categorySlugs: ['gaming-laptop'], limit: 20 });
-  const fallback = useProducts({ categorySlugs: ['laptop'], search: 'gaming', limit: 50 });
-  const merged = pickItems(primary.data?.items, fallback.data?.items) ?? [];
-  const items = merged.filter(isGamingLaptop).slice(0, 10);
-  const isLoading = primary.isLoading || fallback.isLoading;
-  const hasError = primary.isError && fallback.isError;
-
-  if (shouldHideSlider({ isLoading, hasError, items })) {
-    return null;
-  }
-
-  return (
-    <ProductSlider
-      title="سیستم‌های گیمینگ"
-      subtitle="قدرت بی‌نهایت برای گیمرهای حرفه‌ای"
-      viewAllLink="/products/category/gaming-laptop"
-      products={items}
-      isLoading={isLoading}
-      variant="flash"
-    />
-  );
+  return <CategorySliderSection config={sliderConfigs.gamingLaptops} />;
 }
 
-// 3. Budget Laptops
 export function BudgetLaptopSlider() {
-  const primary = useProducts({ categorySlugs: ['budget-laptop'], maxPrice: 30000000, limit: 20 });
-  const fallback = useProducts({
-    search: 'laptop',
-    maxPrice: 30000000,
-    limit: 10,
-  });
-  const items = pickItems(primary.data?.items, fallback.data?.items);
-  const isLoading = primary.isLoading || fallback.isLoading;
-  const hasError = primary.isError && fallback.isError;
-
-  if (shouldHideSlider({ isLoading, hasError, items })) {
-    return null;
-  }
-
-  return (
-    <ProductSlider
-      title="لپ‌تاپ‌های اقتصادی"
-      subtitle="کارایی بالا، قیمت مناسب برای دانشجویان و دانش‌آموزان"
-      viewAllLink="/products/category/budget-laptop?maxPrice=30000000"
-      products={items}
-      isLoading={isLoading}
-      variant="minimal"
-    />
-  );
+  return <CategorySliderSection config={sliderConfigs.budgetLaptops} />;
 }
 
-// 4. Workstation Laptops
 export function WorkstationLaptopSlider() {
-  const primary = useProducts({ categorySlugs: ['workstation-pc'], limit: 20 });
-  const fallback = useProducts({ categorySlugs: ['engineering-laptop', 'programming-laptop'], limit: 20 });
-  const items = pickItems(primary.data?.items, fallback.data?.items);
-  const isLoading = primary.isLoading || fallback.isLoading;
-  const hasError = primary.isError && fallback.isError;
-
-  if (shouldHideSlider({ isLoading, hasError, items })) {
-    return null;
-  }
-
-  return (
-    <ProductSlider
-      title="ورک‌استیشن‌های پردازشی"
-      subtitle="مخصوص رندرینگ، برنامه‌نویسی و کارهای سنگین"
-      viewAllLink="/products/category/engineering-laptop"
-      products={items}
-      isLoading={isLoading}
-      variant="premium"
-    />
-  );
+  return <CategorySliderSection config={sliderConfigs.workstationLaptops} />;
 }
 
-// 5. Ultrabooks
 export function UltrabookSlider() {
-  const primary = useProducts({ categorySlugs: ['ultrabook', 'convertible-laptop'], limit: 20 });
-  const fallback = useProducts({ categorySlugs: ['laptop'], search: 'touch', limit: 20 });
-  const items = pickItems(primary.data?.items, fallback.data?.items);
-  const isLoading = primary.isLoading || fallback.isLoading;
-  const hasError = primary.isError && fallback.isError;
-
-  if (shouldHideSlider({ isLoading, hasError, items })) {
-    return null;
-  }
-
-  return (
-    <ProductSlider
-      title="اولترابوک‌های سبک و باریک"
-      subtitle="همیشه همراه شما با شارژدهی فوق‌العاده"
-      viewAllLink="/products/category/ultrabook"
-      products={items}
-      isLoading={isLoading}
-      variant="default"
-    />
-  );
+  return <CategorySliderSection config={sliderConfigs.ultrabooks} />;
 }
 
-// 6. Tablets
 export function TabletSlider() {
-  const primary = useProducts({ categorySlugs: ['convertible-laptop'], limit: 20 });
-  const fallback = useProducts({ search: 'x360', limit: 20 });
-  const items = pickItems(primary.data?.items, fallback.data?.items);
-  const isLoading = primary.isLoading || fallback.isLoading;
-  const hasError = primary.isError && fallback.isError;
-
-  if (shouldHideSlider({ isLoading, hasError, items })) {
-    return null;
-  }
-
-  return (
-    <ProductSlider
-      title="تبلت‌ها و کتاب‌خوان‌ها"
-      subtitle="برای مطالعه، طراحی و سرگرمی"
-      viewAllLink="/products/category/convertible-laptop"
-      products={items}
-      isLoading={isLoading}
-      variant="default"
-    />
-  );
+  return <CategorySliderSection config={sliderConfigs.tablets} />;
 }
 
-// 7. Gaming Consoles
 export function ConsoleSlider() {
-  const primary = useProducts({ categorySlugs: ['gaming-console'], limit: 20 });
-  const fallback = useProducts({ categorySlugs: ['playstation', 'xbox', 'nintendo'], limit: 20 });
-  const items = pickItems(primary.data?.items, fallback.data?.items);
-  const isLoading = primary.isLoading || fallback.isLoading;
-  const hasError = primary.isError && fallback.isError;
-
-  if (shouldHideSlider({ isLoading, hasError, items })) {
-    return null;
-  }
-
-  return (
-    <ProductSlider
-      title="کنسول‌های بازی"
-      subtitle="تجربه گیمینگ نسل جدید"
-      viewAllLink="/products/category/gaming-console"
-      products={items}
-      isLoading={isLoading}
-      variant="flash"
-    />
-  );
+  return <CategorySliderSection config={sliderConfigs.consoles} />;
 }
 
-// 8. Monitors
 export function MonitorSlider() {
-  const primary = useProducts({ search: 'مانیتور', limit: 10 });
-  const fallback = useProducts({ search: 'monitor', limit: 10 });
-  const items = pickItems(primary.data?.items, fallback.data?.items);
-  const isLoading = primary.isLoading || fallback.isLoading;
-  const hasError = primary.isError && fallback.isError;
-
-  if (shouldHideSlider({ isLoading, hasError, items })) {
-    return null;
-  }
-
-  return (
-    <ProductSlider
-      title="مانیتورها"
-      subtitle="نمایشگرهای با کیفیت برای کار و بازی"
-      viewAllLink="/products/category/monitor"
-      products={items}
-      isLoading={isLoading}
-      variant="default"
-    />
-  );
+  return <CategorySliderSection config={sliderConfigs.monitors} />;
 }
 
-// 9. PC Cases
 export function CaseSlider() {
-  const primary = useProducts({ categorySlugs: ['pc-case'], limit: 20 });
-  const fallback = useProducts({ categorySlugs: ['gaming-pc', 'office-pc', 'workstation-pc'], limit: 20 });
-  const items = pickItems(primary.data?.items, fallback.data?.items);
-  const isLoading = primary.isLoading || fallback.isLoading;
-  const hasError = primary.isError && fallback.isError;
-
-  if (shouldHideSlider({ isLoading, hasError, items })) {
-    return null;
-  }
-
-  return (
-    <ProductSlider
-      title="کیس‌های کامپیوتر"
-      subtitle="طراحی زیبا و خنک‌کاری عالی"
-      viewAllLink="/products/category/pc-case"
-      products={items}
-      isLoading={isLoading}
-      variant="minimal"
-    />
-  );
+  return <CategorySliderSection config={sliderConfigs.cases} />;
 }
 
-// 10. Printers
 export function PrinterSlider() {
-  const primary = useProducts({ search: 'پرینتر', limit: 10 });
-  const fallback = useProducts({ search: 'printer', limit: 10 });
-  const items = pickItems(primary.data?.items, fallback.data?.items);
-  const isLoading = primary.isLoading || fallback.isLoading;
-  const hasError = primary.isError && fallback.isError;
-
-  if (shouldHideSlider({ isLoading, hasError, items })) {
-    return null;
-  }
-
-  return (
-    <ProductSlider
-      title="پرینترها و اسکنرها"
-      subtitle="برای نیازهای اداری و خانگی"
-      viewAllLink="/products/category/printer"
-      products={items}
-      isLoading={isLoading}
-      variant="default"
-    />
-  );
+  return <CategorySliderSection config={sliderConfigs.printers} />;
 }
+
+export { sliderConfigs };

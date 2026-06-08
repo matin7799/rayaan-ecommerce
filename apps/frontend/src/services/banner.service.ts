@@ -54,4 +54,34 @@ export const bannerService = {
     );
     return data.data;
   },
+
+  /**
+   * Create a new banner (Admin)
+   */
+  createBanner: async (payload: Partial<Banner>): Promise<Banner> => {
+    const { data } = await apiClient.post<ApiResponse<Banner>>(
+      API_ENDPOINTS.BANNERS.LIST,
+      payload
+    );
+    return data.data;
+  },
+
+  /**
+   * Update banner (Admin)
+   */
+  updateBanner: async (id: string, payload: Partial<Banner>): Promise<Banner> => {
+    const { data } = await apiClient.patch<ApiResponse<Banner>>(
+      API_ENDPOINTS.BANNERS.DETAIL(id),
+      payload
+    );
+    return data.data;
+  },
+
+  /**
+   * Delete banner (Admin)
+   */
+  deleteBanner: async (id: string): Promise<void> => {
+    await apiClient.delete(API_ENDPOINTS.BANNERS.DETAIL(id));
+  },
 };
+

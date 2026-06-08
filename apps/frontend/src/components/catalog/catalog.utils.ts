@@ -49,6 +49,7 @@ export function mapCatalogProductToCard(product: CatalogApiProduct): CatalogList
   const partnerDiscount = product.pricing.discounts.find((discount) => discount.type === 'PARTNER');
   const thumbnailUrl = product.thumbnail?.url?.trim() || product.media?.thumbnail?.url?.trim();
   const firstImageUrl = resolveImageUrl(product.images?.[0]) || product.media?.gallery?.[0]?.url?.trim();
+  const inStock = product.stockQuantity > 0;
 
   return {
     id: product.id,
@@ -70,7 +71,8 @@ export function mapCatalogProductToCard(product: CatalogApiProduct): CatalogList
         : undefined,
 
     badge: partnerDiscount ? 'همکار' : saleDiscount ? 'حراج' : undefined,
-    inStock: product.stockQuantity > 0,
+    inStock,
+    isUnavailable: !inStock,
 
     rating: 0,
     reviewsCount: 0,

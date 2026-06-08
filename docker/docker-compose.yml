@@ -1,7 +1,7 @@
 services:
   postgres:
-    image: postgres:16-alpine
-    profiles: ["local-db"]
+    image: postgres:alpine
+    profiles: [ "local-db" ]
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -10,19 +10,19 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" ]
       interval: 10s
       timeout: 5s
       retries: 5
 
   redis:
-    image: redis:7-alpine
+    image: redis:alpine
     restart: unless-stopped
     command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -35,7 +35,11 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3002
+
       FRONTEND_URL: ${FRONTEND_URL}
+      APP_BASE_URL: ${APP_BASE_URL}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+
       DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT}
       DB_USERNAME: ${DB_USERNAME}
@@ -43,14 +47,46 @@ services:
       DB_NAME: ${DB_NAME}
       DB_SSL: ${DB_SSL}
       DB_SSL_REJECT_UNAUTHORIZED: ${DB_SSL_REJECT_UNAUTHORIZED}
+
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_DB: 0
+
       JWT_SECRET: ${JWT_SECRET}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
       JWT_TEMP_SECRET: ${JWT_TEMP_SECRET}
-      APP_BASE_URL: ${APP_BASE_URL}
-      CORS_ORIGINS: ${CORS_ORIGINS}
+
+      ZARINPAL_MERCHANT_ID: ${ZARINPAL_MERCHANT_ID}
+      ZARINPAL_SANDBOX: ${ZARINPAL_SANDBOX}
+
+      DIGIPAY_SANDBOX: ${DIGIPAY_SANDBOX}
+      DIGIPAY_CLIENT_ID: ${DIGIPAY_CLIENT_ID}
+      DIGIPAY_CLIENT_SECRET: ${DIGIPAY_CLIENT_SECRET}
+      DIGIPAY_USERNAME: ${DIGIPAY_USERNAME}
+      DIGIPAY_PASSWORD: ${DIGIPAY_PASSWORD}
+      DIGIPAY_MOCK_MODE: ${DIGIPAY_MOCK_MODE}
+      DIGIPAY_SELLER_ID: ${DIGIPAY_SELLER_ID}
+      DIGIPAY_SUPPLIER_ID: ${DIGIPAY_SUPPLIER_ID}
+
+      SSL_KEY_PATH: ${SSL_KEY_PATH}
+      SSL_CERT_PATH: ${SSL_CERT_PATH}
+
+      SMS_PROVIDER: ${SMS_PROVIDER}
+      MELIPAYAMAK_USERNAME: ${MELIPAYAMAK_USERNAME}
+      MELIPAYAMAK_PASSWORD: ${MELIPAYAMAK_PASSWORD}
+      MELIPAYAMAK_FROM: ${MELIPAYAMAK_FROM}
+      MELIPAYAMAK_OTP_BODY_ID: ${MELIPAYAMAK_BODY_ID}
+      MELIPAYAMAK_PATTERN_API_URL: ${MELIPAYAMAK_PATTERN_API_URL}
+      SMSIR_API_KEY: ${SMSIR_API_KEY}
+      SMSIR_OTP_TEMPLATE_ID: ${SMSIR_OTP_TEMPLATE_ID}
+      SMSIR_OTP_PARAMETER_NAME: ${SMSIR_OTP_PARAMETER_NAME}
+
+      STORAGE_PROVIDER: ${STORAGE_PROVIDER}
+      LIARA_ENDPOINT: ${LIARA_ENDPOINT}
+      LIARA_ACCESS_KEY: ${LIARA_ACCESS_KEY}
+      LIARA_SECRET_KEY: ${LIARA_SECRET_KEY}
+      LIARA_BUCKET_NAME: ${LIARA_BUCKET_NAME}
+      STORAGE_REGION: ${STORAGE_REGION}
     depends_on:
       redis:
         condition: service_healthy
@@ -72,7 +108,7 @@ services:
         condition: service_started
 
   caddy:
-    image: caddy:2-alpine
+    image: caddy:alpine
     restart: unless-stopped
     ports:
       - "80:80"

@@ -122,7 +122,7 @@ export function CatalogFilterSidebar({
   };
 
   return (
-    <aside className="w-full rounded-2xl border bg-white p-4 shadow-sm dark:bg-zinc-900 lg:w-80">
+    <aside className="w-full rounded-2xl border bg-white/50 p-4 shadow-sm dark:bg-zinc-900/50 lg:w-80">
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Tag className="size-4" />

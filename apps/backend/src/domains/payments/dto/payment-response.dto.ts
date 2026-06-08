@@ -1,12 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
 
 // ──────────────────────────────────────────────────────
-// DTO پاسخ شروع پرداخت — لینک پرداخت برای ریدایرکت کاربر
-// طبق API Contract: خروجی initiate شامل paymentUrl است
+// DTO پاسخ شروع پرداخت
 // ──────────────────────────────────────────────────────
 export class InitiatePaymentResponseDto {
   @ApiProperty({
-    description: 'شناسه پرداخت',
+    description: 'شناسه داخلی پرداخت',
     example: '550e8400-e29b-41d4-a716-446655440000',
   })
   paymentId!: string;
@@ -20,7 +19,7 @@ export class InitiatePaymentResponseDto {
 }
 
 // ──────────────────────────────────────────────────────
-// DTO پاسخ callback — نتیجه نهایی پرداخت
+// DTO پاسخ callback
 // ──────────────────────────────────────────────────────
 export class CallbackPaymentResponseDto {
   @ApiProperty({
@@ -36,7 +35,7 @@ export class CallbackPaymentResponseDto {
   message!: string;
 
   @ApiProperty({
-    description: 'شناسه مرجع پرداخت (ref_id)',
+    description: 'شناسه مرجع پرداخت نهایی درگاه',
     example: '12345678',
     nullable: true,
   })
@@ -47,4 +46,11 @@ export class CallbackPaymentResponseDto {
     example: '550e8400-e29b-41d4-a716-446655440000',
   })
   orderId!: string;
+
+  @ApiProperty({
+    description: 'شناسه اولیه درگاه (مثل authority در زرین‌پال)',
+    example: 'A00000000000000000000000000217885',
+    nullable: true,
+  })
+  authority!: string | null;
 }

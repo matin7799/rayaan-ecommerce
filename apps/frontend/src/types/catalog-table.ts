@@ -1,4 +1,4 @@
-import type { CatalogFilters, Product } from '@/services/api/catalog.service';
+import type { CatalogFilters, Product } from '@/services/catalog.service';
 
 export const catalogTableConfig = {
   enableSubcategoryFilter: true,
@@ -14,8 +14,7 @@ export type CatalogTableSortField =
 export type CatalogTableSortOrder = 'ASC' | 'DESC';
 
 export interface CatalogTableQueryState {
-  category?: string;
-  subcategory?: string;
+  categorySlugs: string[];
   brandSlugs: string[];
   search?: string;
   minPrice?: number;

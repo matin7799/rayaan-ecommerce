@@ -1,6 +1,8 @@
 import { Metadata } from "next";
 import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
+
+export const dynamic = 'force-dynamic';
 import { ProductGallery } from "@/components/product/product-gallery";
 import { ProductInfo } from "@/components/product/product-info";
 import { ProductTabs } from "@/components/product/product-tabs";
@@ -113,6 +115,7 @@ export default async function ProductDetailPage({
   // Map product data to component format
   const mappedProduct = {
     id: product.id,
+    slug: product.slug,
     title: product.title,
     brand: product.brand?.name || product.categories?.[0]?.name || '',
     shortDescription: product.shortDescription || product.description || '',
@@ -214,32 +217,41 @@ export default async function ProductDetailPage({
   }
 
   return (
-    <main className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
-      
-      {/* Product Gallery and Info */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 xl:gap-16 mb-16">
-        
-        {/* Gallery */}
-        <section className="relative">
-          <ProductGallery images={mappedProduct.images} />
-        </section>
+    <div className="min-h-screen">
+      <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-10">
 
-        {/* Product Info */}
-        <section className="relative">
-          <div className="absolute -inset-4 bg-linear-to-br from-primary/5 via-transparent to-transparent rounded-3xl -z-10 blur-2xl"></div>
-          <ProductInfo product={mappedProduct} />
-        </section>
-        
+        {/* Breadcrumb */}
+        <nav className="flex items-center gap-2 text-xs text-zinc-400 mb-8">
+          <a href="/" className="hover:text-primary transition-colors">خانه</a>
+          <span>/</span>
+          <a href="/products" className="hover:text-primary transition-colors">محصولات</a>
+          <span>/</span>
+          <span className="text-zinc-700 dark:text-zinc-300 font-medium truncate max-w-[200px]">{mappedProduct.title}</span>
+        </nav>
+
+        {/* Gallery + Info */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 xl:gap-14 mb-14">
+          <section>
+            <ProductGallery images={mappedProduct.images} />
+          </section>
+          <section>
+            <ProductInfo product={mappedProduct} />
+          </section>
+        </div>
+
+        {/* Tabs */}
+        <div className="border-t border-zinc-100 dark:border-zinc-800 pt-10">
+          <ProductTabs product={mappedProduct} />
+        </div>
+
+        {/* Related Products */}
+        {relatedProducts.length > 0 && (
+          <div className="border-t border-zinc-100 dark:border-zinc-800 pt-4">
+            <RelatedProducts products={relatedProducts} title="پیشنهادهای مشابه" />
+          </div>
+        )}
+
       </div>
-
-      {/* Product Tabs */}
-      <ProductTabs product={mappedProduct} />
-
-      {/* Related Products */}
-      {relatedProducts.length > 0 && (
-        <RelatedProducts products={relatedProducts} title="پیشنهادهای مشابه" />
-      )}
-
-    </main>
+    </div>
   );
 }

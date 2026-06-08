@@ -1,48 +1,43 @@
 import {
-  Controller,
-  Post,
-  Get,
+  BadRequestException,
   Body,
+  Controller,
+  DefaultValuePipe,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Logger,
   Param,
+  ParseIntPipe,
+  Post,
   Query,
   Req,
   Res,
   UseGuards,
-  HttpCode,
-  HttpStatus,
-  Logger,
-  DefaultValuePipe,
-  ParseIntPipe,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
   ApiBearerAuth,
+  ApiOperation,
   ApiParam,
   ApiQuery,
+  ApiResponse,
+  ApiTags,
 } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
-import { PaymentsService } from './payments.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { Auth } from '../../common/decorators/auth.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { Role } from '../auth/enums/role.enum';
-import { Auth } from '../../common/decorators/auth.decorator';
+import { PaymentsService } from './payments.service';
+import { PaymentProvider } from './enums/payment-provider.enum';
 import { PaymentStatus } from './enums/payment-status.enum';
 import {
+  CallbackPaymentResponseDto,
   InitiatePaymentDto,
   InitiatePaymentResponseDto,
-  CallbackPaymentResponseDto,
 } from './dto';
-import { PaymentProvider } from './enums/payment-provider.enum';
-
-// ──────────────────────────────────────────────────────
-// کنترلر پرداخت — طبق API Contract (06-api-contracts.md)
-// دو endpoint:
-//   POST /api/v1/payments/initiate     → شروع پرداخت (نیاز به auth)
-//   POST /api/v1/payments/callback/:provider → دریافت callback (بدون auth)
-// ──────────────────────────────────────────────────────
 
 @ApiTags('Payments')
 @UseGuards(ThrottlerGuard)
@@ -50,13 +45,11 @@ import { PaymentProvider } from './enums/payment-provider.enum';
 export class PaymentsController {
   private readonly logger = new Logger(PaymentsController.name);
 
-  constructor(private readonly paymentsService: PaymentsService) {}
+  constructor(
+    private readonly paymentsService: PaymentsService,
+    private readonly configService: ConfigService,
+  ) {}
 
-  // ────────────────────────────────────────────
-  // شروع پرداخت — کاربر احراز هویت شده
-  // ورودی: orderId
-  // خروجی: paymentId + paymentUrl (لینک ریدایرکت به درگاه)
-  // ────────────────────────────────────────────
   @Post('initiate')
   @UseGuards(JwtAuthGuard)
   @Throttle({ default: { limit: 10, ttl: 60000 } })
@@ -68,28 +61,24 @@ export class PaymentsController {
     description: 'لینک پرداخت با موفقیت ایجاد شد',
     type: InitiatePaymentResponseDto,
   })
-  @ApiResponse({ status: 404, description: 'سفارش یافت نشد' })
-  @ApiResponse({ status: 400, description: 'سفارش قابل پرداخت نیست' })
   async initiatePayment(
     @Body() dto: InitiatePaymentDto,
     @Req() req: Request,
   ): Promise<InitiatePaymentResponseDto> {
-    // userId از JWT token استخراج می‌شود
     const userId = (req as any).user.id;
-
     this.logger.log(
-      `درخواست شروع پرداخت: orderId=${dto.orderId}, userId=${userId}`,
+      `initiate payment requested. orderId=${dto.orderId}, provider=${dto.provider ?? 'default'}, userId=${userId}`,
     );
 
-    return this.paymentsService.initiatePayment(dto.orderId, userId);
+    return this.paymentsService.initiatePayment(
+      dto.orderId,
+      userId,
+      dto.provider,
+    );
   }
 
-  // ────────────────────────────────────────────
-  // دریافت callback از درگاه پرداخت
-  // این endpoint بدون auth است چون درگاه آن را فراخوانی می‌کند
-  // provider از URL path و paymentId از query string گرفته می‌شود
-  // ────────────────────────────────────────────
   @Get('callback/:provider')
+  @Post('callback/:provider')
   @Throttle({ default: { limit: 120, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'دریافت callback از درگاه پرداخت' })
@@ -100,51 +89,58 @@ export class PaymentsController {
   })
   @ApiQuery({
     name: 'paymentId',
-    description: 'شناسه پرداخت',
+    description: 'شناسه داخلی پرداخت',
     type: String,
+    required: false,
   })
   @ApiResponse({
     status: 200,
     description: 'نتیجه پردازش callback',
     type: CallbackPaymentResponseDto,
   })
-  @ApiResponse({ status: 404, description: 'پرداخت یافت نشد' })
   async handleCallback(
     @Param('provider') provider: PaymentProvider,
     @Query('paymentId') paymentId: string,
     @Req() req: Request,
     @Res() res: Response,
   ): Promise<void> {
+    const resolvedPaymentId = (paymentId ||
+      req.body?.paymentId ||
+      req.body?.providerId ||
+      req.query?.providerId ||
+      '') as string;
+
+    if (!resolvedPaymentId?.trim()) {
+      throw new BadRequestException('paymentId is required');
+    }
+
     this.logger.log(
-      `callback دریافت شد: provider=${provider}, paymentId=${paymentId}`,
+      `payment callback received. provider=${provider}, paymentId=${resolvedPaymentId}`,
     );
 
-    // ────────────────────────────────────────────
-    // ترکیب query params و body برای ارسال کامل payload به service
-    // زرین‌پال اطلاعات را در query string می‌فرستد
-    // ────────────────────────────────────────────
-    const fullPayload = {
-      ...req.query,
-    };
+    const fullPayload = { ...req.query, ...req.body };
 
     const result = await this.paymentsService.handleCallback(
       provider,
-      paymentId,
+      resolvedPaymentId,
       fullPayload,
     );
 
-    // Redirect to frontend callback page
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3001';
-    const callbackUrl = new URL('/payment/callback', frontendUrl);
+    const frontendUrl = this.configService.get<string>(
+      'FRONTEND_URL',
+      'http://localhost:3001',
+    );
 
-    // Pass payment result as query params
+    const callbackUrl = new URL('/payment/callback', frontendUrl);
     callbackUrl.searchParams.set(
       'status',
       result.success ? 'success' : 'failed',
     );
+    callbackUrl.searchParams.set('message', result.message);
     callbackUrl.searchParams.set('orderId', result.orderId);
-    if (result.refId) {
-      callbackUrl.searchParams.set('refId', result.refId);
+    if (result.refId) callbackUrl.searchParams.set('refId', result.refId);
+    if (result.authority) {
+      callbackUrl.searchParams.set('authority', result.authority);
     }
 
     res.redirect(callbackUrl.toString());

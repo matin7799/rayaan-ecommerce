@@ -14,25 +14,31 @@ import { AddressesRepository } from '../users/addresses.repository';
 import { ShippingRepository } from '../shipping/shipping.repository';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { Order, OrderStatus } from './entities/order.entity';
-import type { ICartItem } from '../cart/interfaces/cart-item.interface';
 import {
   OrderCancelRequest,
   OrderCancelRequestStatus,
 } from './entities/order-cancel-request.entity';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { isTorobAttributed } from '../../common/utils/torob-attribution.util';
-import { PricingChannel } from '../catalog/services/price-calculator.service';
 import { User } from '../users/entities/user.entity';
+import {
+  validateAndRecalculateItems,
+  validateStatusTransition,
+} from './order-validation.helper';
+import { OrderCancelService } from './order-cancel.service';
+import { DigipayService } from '../payments/providers/digipay/digipay.service';
+import { Payment } from '../payments/entities/payment.entity';
+import { PaymentStatus } from '../payments/enums/payment-status.enum';
 
-interface ValidatedCartItem {
-  productId: string | null;
-  productTitle: string;
-  productSlug: string;
-  optionName: string | null;
-  quantity: number;
-  unitPrice: number;
-  totalPrice: number;
+export interface AdminOrderResponse extends Order {
+  user_summary?: {
+    id: string;
+    full_name: string;
+    phone: string;
+    role: string;
+  };
+  items_count?: number;
 }
 
 @Injectable()
@@ -45,8 +51,11 @@ export class OrdersService {
     private readonly catalogService: CatalogService,
     private readonly addressesRepo: AddressesRepository,
     private readonly shippingRepo: ShippingRepository,
+    private readonly orderCancelService: OrderCancelService,
+    private readonly digipayService: DigipayService,
     @InjectRepository(OrderCancelRequest)
     private readonly cancelRequestRepo: Repository<OrderCancelRequest>,
+    private readonly dataSource: DataSource,
   ) {}
 
   async checkout(
@@ -78,7 +87,8 @@ export class OrdersService {
       throw new BadRequestException('سبد خرید شما خالی است.');
     }
 
-    const validatedItems = await this.validateAndRecalculateItems(
+    const validatedItems = await validateAndRecalculateItems(
+      this.catalogService,
       cart.items,
       isTorobAttributed(req),
       ((req as any)?.user as User | undefined) ?? undefined,
@@ -96,6 +106,7 @@ export class OrdersService {
       product_id: item.productId,
       product_title: item.productTitle,
       product_slug: item.productSlug,
+      variant_sku: item.variantSku,
       option_name: item.optionName,
       quantity: item.quantity,
       unit_price: item.unitPrice,
@@ -123,9 +134,6 @@ export class OrdersService {
       orderItemsData,
     );
 
-    // Don't clear cart here - only clear after successful payment
-    // await this.cartService.clearCart(cartId);
-
     this.logger.log(`سفارش ${order.id} با موفقیت ایجاد شد.`);
 
     return order;
@@ -144,7 +152,7 @@ export class OrdersService {
   }
 
   async cancelOrder(orderId: string, userId: string): Promise<Order> {
-    return this.ordersRepository.cancelOrder(orderId, userId);
+    return this.orderCancelService.cancelOrder(orderId, userId);
   }
 
   async requestCancelOrder(
@@ -152,95 +160,60 @@ export class OrdersService {
     userId: string,
     reason: string,
   ): Promise<OrderCancelRequest> {
-    const order = await this.ordersRepository.findById(orderId);
-    if (!order || order.user_id !== userId) {
-      throw new NotFoundException('سفارش یافت نشد.');
-    }
-
-    if (order.status !== OrderStatus.PAID) {
-      throw new BadRequestException(
-        'درخواست لغو فقط برای سفارش پرداخت شده قابل ثبت است.',
-      );
-    }
-
-    const existingPending = await this.cancelRequestRepo.findOne({
-      where: {
-        order_id: orderId,
-        status: OrderCancelRequestStatus.PENDING,
-      },
-    });
-
-    if (existingPending) {
-      throw new BadRequestException('درخواست لغو در حال بررسی است.');
-    }
-
-    const request = this.cancelRequestRepo.create({
-      order_id: orderId,
-      user_id: userId,
-      reason: reason.trim(),
-      status: OrderCancelRequestStatus.PENDING,
-      admin_note: null,
-    });
-
-    return this.cancelRequestRepo.save(request);
+    return this.orderCancelService.requestCancelOrder(orderId, userId, reason);
   }
 
   async getCancelRequestForOrder(orderId: string, userId: string) {
-    const order = await this.ordersRepository.findById(orderId);
-    if (!order || order.user_id !== userId) {
-      throw new NotFoundException('سفارش یافت نشد.');
-    }
-    return this.cancelRequestRepo.findOne({
-      where: { order_id: orderId },
-      order: { created_at: 'DESC' },
-    });
+    return this.orderCancelService.getCancelRequestForOrder(orderId, userId);
   }
 
   async getAllCancelRequests() {
-    return this.cancelRequestRepo.find({
-      order: { created_at: 'DESC' },
-    });
+    return this.orderCancelService.getAllCancelRequests();
   }
 
   async reviewCancelRequest(
     requestId: string,
-    status: OrderCancelRequestStatus.APPROVED | OrderCancelRequestStatus.REJECTED,
+    status:
+      | OrderCancelRequestStatus.APPROVED
+      | OrderCancelRequestStatus.REJECTED,
     adminNote?: string,
   ) {
-    const request = await this.cancelRequestRepo.findOne({
-      where: { id: requestId },
-    });
-    if (!request) {
-      throw new NotFoundException('درخواست لغو یافت نشد.');
-    }
-    if (request.status !== OrderCancelRequestStatus.PENDING) {
-      throw new BadRequestException('این درخواست قبلاً بررسی شده است.');
-    }
-
-    request.status = status;
-    request.admin_note = adminNote?.trim() || null;
-    await this.cancelRequestRepo.save(request);
-
-    if (status === OrderCancelRequestStatus.APPROVED) {
-      const order = await this.ordersRepository.findById(request.order_id);
-      if (order && order.status === OrderStatus.PAID) {
-        await this.ordersRepository.updateStatus(order.id, OrderStatus.CANCELLED);
-      }
-    }
-
-    return request;
+    return this.orderCancelService.reviewCancelRequest(
+      requestId,
+      status,
+      adminNote,
+    );
   }
 
   async findAll(params: {
     page: number;
     limit: number;
     status?: OrderStatus;
-  }): Promise<{ data: Order[]; total: number }> {
-    return this.ordersRepository.findAll(
+  }): Promise<{ data: AdminOrderResponse[]; total: number }> {
+    const result = await this.ordersRepository.findAll(
       params.page,
       params.limit,
       params.status,
     );
+
+    const data = result.data.map((order) => {
+      const user = order.user;
+      return {
+        ...order,
+        items_count: order.items?.length ?? 0,
+        user_summary: user
+          ? {
+              id: user.id,
+              full_name:
+                `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim(),
+              phone: user.phone,
+              role: user.role,
+            }
+          : undefined,
+      };
+    });
+
+    return { data, total: result.total };
   }
 
   async findByIdForAdmin(orderId: string): Promise<Order> {
@@ -256,66 +229,73 @@ export class OrdersService {
     if (!order) {
       throw new NotFoundException('سفارش یافت نشد.');
     }
-    this.validateStatusTransition(order.status, status);
-    return this.ordersRepository.updateStatus(orderId, status);
-  }
+    validateStatusTransition(order.status, status);
 
-  private async validateAndRecalculateItems(
-    cartItems: ICartItem[],
-    isTorobUser = false,
-    user?: User,
-  ): Promise<ValidatedCartItem[]> {
-    const validatedItems: ValidatedCartItem[] = [];
+    const updatedOrder = await this.ordersRepository.updateStatus(
+      orderId,
+      status,
+    );
 
-    for (const item of cartItems) {
-      const product = await this.catalogService.findByVariantId(item.variantId);
-      if (!product || !product.isActive) {
-        throw new BadRequestException(
-          `محصول مرتبط با واریانت "${item.variantId}" یافت نشد یا غیرفعال شده است.`,
+    // Auto-trigger DigiPay delivery report if status transitioned to DELIVERED
+    if (status === OrderStatus.DELIVERED) {
+      try {
+        const payment = await this.dataSource.getRepository(Payment).findOne({
+          where: {
+            order_id: orderId,
+            status: PaymentStatus.SUCCESS,
+            provider: 'digipay' as any,
+          },
+        });
+
+        if (payment && payment.provider_ref_id) {
+          const callbackPayload = payment.callback_payload || {};
+          const rawType =
+            callbackPayload.type !== undefined
+              ? callbackPayload.type
+              : callbackPayload.Type;
+          const type = rawType !== undefined ? Number(rawType) : undefined;
+
+          // Deliver confirmation is required only for Credit (5) and BNPL (13)
+          if (type === 5 || type === 13) {
+            const productCodes = (order.items || []).map(
+              (item) =>
+                item.variant_sku ||
+                item.product_slug ||
+                String(item.product_id),
+            );
+
+            this.logger.log(
+              `Auto-reporting delivery to DigiPay for orderId=${orderId}, trackingCode=${payment.provider_ref_id}`,
+            );
+
+            const deliverResult = await this.digipayService.deliverPurchase(
+              {
+                deliveryDate: Date.now(),
+                invoiceNumber: `INV-${orderId.substring(0, 8).toUpperCase()}`,
+                trackingCode: payment.provider_ref_id,
+                products: productCodes,
+              },
+              type,
+            );
+
+            if (deliverResult.result.status === 0) {
+              this.logger.log(
+                `Auto-delivery successfully reported to DigiPay for orderId=${orderId}`,
+              );
+            } else {
+              this.logger.warn(
+                `Auto-delivery report to DigiPay failed: ${deliverResult.result.message}`,
+              );
+            }
+          }
+        }
+      } catch (err: any) {
+        this.logger.error(
+          `Error reporting auto-delivery to DigiPay: ${err.message}`,
         );
       }
-
-      const variant = product.variants.find((v) => v.id === item.variantId);
-      const unitPrice = variant
-        ? Number(variant.price)
-        : this.catalogService.getProductUnitPriceForChannel(
-            product,
-            user,
-            isTorobUser ? PricingChannel.TOROB : PricingChannel.PUBLIC,
-          );
-      const totalPrice = unitPrice * item.quantity;
-
-      validatedItems.push({
-        productId: product.id,
-        productTitle: product.name,
-        productSlug: product.slug,
-        optionName: null,
-        quantity: item.quantity,
-        unitPrice,
-        totalPrice,
-      });
     }
 
-    return validatedItems;
-  }
-
-  private validateStatusTransition(
-    currentStatus: OrderStatus,
-    newStatus: OrderStatus,
-  ): void {
-    const allowedTransitions: Record<OrderStatus, OrderStatus[]> = {
-      [OrderStatus.PENDING]: [OrderStatus.PAID, OrderStatus.CANCELLED],
-      [OrderStatus.PAID]: [OrderStatus.SHIPPED, OrderStatus.CANCELLED],
-      [OrderStatus.SHIPPED]: [OrderStatus.DELIVERED],
-      [OrderStatus.DELIVERED]: [],
-      [OrderStatus.CANCELLED]: [],
-    };
-
-    const allowed = allowedTransitions[currentStatus];
-    if (!allowed || !allowed.includes(newStatus)) {
-      throw new BadRequestException(
-        `تغییر وضعیت از "${currentStatus}" به "${newStatus}" مجاز نیست.`,
-      );
-    }
+    return updatedOrder;
   }
 }

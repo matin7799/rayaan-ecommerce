@@ -11,7 +11,9 @@ import {
   ParseUUIDPipe,
   Req,
   Res,
+  UnauthorizedException,
 } from '@nestjs/common';
+import { MergeCartDto } from './dto';
 import type { Request, Response } from 'express';
 import { CartService } from './cart.service';
 import { AddToCartDto } from './dto/add-to-cart.dto';
@@ -76,6 +78,24 @@ export class CartController {
       dto,
       isTorobAttributed(req),
       (req as any).user,
+    );
+  }
+
+  @Post('merge')
+  async mergeCart(
+    @Req() req: Request,
+    @Body() dto: MergeCartDto,
+  ): Promise<ICart> {
+    const user = (req as any).user;
+    if (!user || !user.id) {
+      throw new UnauthorizedException('برای ادغام سبد خرید باید وارد سیستم شوید');
+    }
+    const cartId = `user:${user.id}`;
+    return this.cartService.mergeCart(
+      cartId,
+      dto.items,
+      isTorobAttributed(req),
+      user,
     );
   }
 

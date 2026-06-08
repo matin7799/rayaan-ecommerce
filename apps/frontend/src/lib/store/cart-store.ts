@@ -1,56 +1,62 @@
-import { create } from 'zustand'
-
-export interface CartItem {
-  productId: string
-  name: string
-  price: number
-  quantity: number
-  image?: string
-}
+import { create } from 'zustand';
+import { Cart } from '@/services/cart.service';
 
 interface CartState {
-  items: CartItem[]
-
-  addItem: (item: CartItem) => void
-  removeItem: (productId: string) => void
-  updateQuantity: (productId: string, quantity: number) => void
-  clearCart: () => void
+  cart: Cart | null;
+  setCart: (cart: Cart) => void;
+  clearCart: () => void;
+  
+  // Optimistic UI updates
+  optimisticUpdateItemQuantity: (variantId: string, quantity: number) => void;
+  optimisticRemoveItem: (variantId: string) => void;
 }
 
 export const useCartStore = create<CartState>((set) => ({
-  items: [],
-
-  addItem: (item) =>
+  cart: null,
+  setCart: (cart) => set({ cart }),
+  clearCart: () => set({ cart: null }),
+  
+  optimisticUpdateItemQuantity: (variantId, quantity) =>
     set((state) => {
-      const existing = state.items.find((i) => i.productId === item.productId)
-
-      if (existing) {
-        return {
-          items: state.items.map((i) =>
-            i.productId === item.productId
-              ? { ...i, quantity: i.quantity + item.quantity }
-              : i
-          ),
+      if (!state.cart) return {};
+      const updatedItems = state.cart.items.map((item) => {
+        if (item.variantId === variantId) {
+          const newQty = Math.max(1, Math.min(item.maxStock, quantity));
+          return {
+            ...item,
+            quantity: newQty,
+            subtotal: item.price * newQty,
+          };
         }
-      }
+        return item;
+      });
 
-      return { items: [...state.items, item] }
+      const totalItems = updatedItems.reduce((sum, item) => sum + item.quantity, 0);
+      const totalPrice = updatedItems.reduce((sum, item) => sum + item.subtotal, 0);
+
+      return {
+        cart: {
+          items: updatedItems,
+          totalItems,
+          totalPrice,
+        },
+      };
     }),
 
-  removeItem: (productId) =>
-    set((state) => ({
-      items: state.items.filter((i) => i.productId !== productId),
-    })),
+  optimisticRemoveItem: (variantId) =>
+    set((state) => {
+      if (!state.cart) return {};
+      const updatedItems = state.cart.items.filter((item) => item.variantId !== variantId);
 
-  updateQuantity: (productId, quantity) =>
-    set((state) => ({
-      items: state.items.map((i) =>
-        i.productId === productId ? { ...i, quantity } : i
-      ),
-    })),
+      const totalItems = updatedItems.reduce((sum, item) => sum + item.quantity, 0);
+      const totalPrice = updatedItems.reduce((sum, item) => sum + item.subtotal, 0);
 
-  clearCart: () =>
-    set({
-      items: [],
+      return {
+        cart: {
+          items: updatedItems,
+          totalItems,
+          totalPrice,
+        },
+      };
     }),
-}))
+}));

@@ -4,17 +4,21 @@ import { HeroSlider } from "./HeroSlider";
 
 export function HeroSection() {
   return (
-    <section className="w-full py-4 sm:py-6 lg:py-8">
+    <section className="relative w-full pt-4 sm:pt-6 lg:pt-8 pb-2 sm:pb-4 lg:pb-6 overflow-hidden">
       <div className="container mx-auto px-4">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 max-w-[1920px] mx-auto">
-          {/* Main Slider - 8 columns on desktop */}
-          <div className="lg:col-span-8 h-[280px] sm:h-[350px] lg:h-[400px] xl:h-[450px]">
-            <HeroSlider />
+        <div className="mx-auto grid max-w-480 grid-cols-1 gap-4 lg:grid-cols-12 lg:gap-6 items-stretch">
+          {/* Main Slider */}
+          <div className="lg:col-span-8">
+            <div className="relative min-h-65 sm:min-h-80 lg:min-h-100 xl:min-h-112.5 h-full rounded-2xl sm:rounded-3xl overflow-hidden">
+              <HeroSlider />
+            </div>
           </div>
-          
-          {/* Side Banners - 4 columns on desktop */}
-          <div className="hidden lg:block lg:col-span-4 h-[400px] xl:h-[450px]">
-            <HeroSideBanners />
+
+          {/* Side Banners */}
+          <div className="hidden lg:block lg:col-span-4">
+            <div className="relative min-h-100 xl:min-h-112.5 h-full rounded-2xl sm:rounded-3xl overflow-hidden">
+              <HeroSideBanners />
+            </div>
           </div>
         </div>
       </div>

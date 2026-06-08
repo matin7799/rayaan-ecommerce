@@ -30,7 +30,9 @@ export function CatalogProductGrid({ filters = {} }: CatalogProductGridProps) {
   } = useInfiniteProductsQuery(filters);
 
   const products = useMemo(() => {
-    return data?.pages.flatMap((page) => page.items) ?? [];
+    return [...(data?.pages.flatMap((page) => page.items) ?? [])].sort(
+      (left, right) => Number(left.isUnavailable) - Number(right.isUnavailable)
+    );
   }, [data]);
 
   useEffect(() => {
@@ -74,13 +76,14 @@ export function CatalogProductGrid({ filters = {} }: CatalogProductGridProps) {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-4">
         {products.map((product, index) => (
           <ProductCard
             key={product.id}
             product={product}
             index={index}
             inStock={product.inStock}
+            
           />
         ))}
       </div>

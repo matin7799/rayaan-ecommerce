@@ -1,8 +1,7 @@
 import { useInfiniteQuery, type InfiniteData } from '@tanstack/react-query';
 
-import { getCatalogProducts } from '@/services/api/catalog.service';
-
-import type { CatalogFilters, CatalogResponse } from '@/services/api/catalog.service';
+import { getCatalogProducts } from '@/services/catalog.service';
+import type { CatalogFilters, CatalogResponse } from '@/services/catalog.service';
 import { mapCatalogProductToCard } from '@/components/catalog/catalog.utils';
 import { ProductCardItem } from '@/types/catalog.types';
 

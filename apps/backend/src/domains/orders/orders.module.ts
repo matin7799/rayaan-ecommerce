@@ -12,6 +12,8 @@ import { CatalogModule } from '../catalog/catalog.module';
 import { CartModule } from '../cart/cart.module';
 import { UsersModule } from '../users/users.module';
 import { ShippingModule } from '../shipping/shipping.module';
+import { OrderCancelService } from './order-cancel.service';
+import { DigipayModule } from '../payments/providers/digipay/digipay.module';
 
 @Module({
   imports: [
@@ -20,9 +22,10 @@ import { ShippingModule } from '../shipping/shipping.module';
     CartModule,
     UsersModule,
     ShippingModule,
+    DigipayModule,
   ],
   controllers: [OrdersController],
-  providers: [OrdersService, OrdersRepository],
-  exports: [OrdersService],
+  providers: [OrdersService, OrdersRepository, OrderCancelService],
+  exports: [OrdersService, OrderCancelService],
 })
 export class OrdersModule {}

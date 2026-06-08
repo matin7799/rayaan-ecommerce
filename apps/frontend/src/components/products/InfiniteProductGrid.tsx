@@ -24,6 +24,7 @@ function mapProduct(product: ProductListItem) {
   const mediaThumbnail = product.media?.thumbnail;
   const firstCategory = product.categories?.[0];
   const stock = firstVariant?.inventory?.stock ?? firstVariant?.stock ?? 0;
+  const inStock = stock > 0;
 
   return {
     id: product.id,
@@ -43,7 +44,8 @@ function mapProduct(product: ProductListItem) {
     reviewsCount: 0,
     isNew: product.isActive,
     shortDescription: product.description || '',
-    inStock: stock > 0,
+    inStock,
+    isUnavailable: !inStock,
     defaultVariantId: firstVariant?.id,
     hasMultipleVariants: (product.variants?.length || 0) > 1,
   };
@@ -91,7 +93,9 @@ export function InfiniteProductGrid({ initialCategoryId }: InfiniteProductGridPr
     );
   }
 
-  const allProducts = data?.pages.flatMap((page) => page.items) || [];
+  const allProducts = [...(data?.pages.flatMap((page) => page.items) || [])].sort(
+    (left, right) => Number(left.isUnavailable) - Number(right.isUnavailable),
+  );
 
   if (allProducts.length === 0) {
     return (

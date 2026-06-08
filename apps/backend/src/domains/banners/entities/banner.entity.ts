@@ -6,6 +6,7 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  Index,
 } from 'typeorm';
 
 export enum BannerPosition {
@@ -17,6 +18,8 @@ export enum BannerPosition {
 }
 
 @Entity('banners')
+@Index(['position', 'isActive'])
+@Index(['isActive', 'startDate', 'endDate'])
 export class Banner {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

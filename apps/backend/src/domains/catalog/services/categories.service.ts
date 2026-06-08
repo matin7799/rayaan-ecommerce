@@ -10,10 +10,14 @@ import { CategoriesRepository } from '../categories.repository';
 import { CreateCategoryDto } from '../dto/create-category.dto';
 import { UpdateCategoryDto } from '../dto/update-category.dto';
 import { Category } from '../entities/category.entity';
+import { CacheService } from '../../../shared/redis/cache.service';
 
 @Injectable()
 export class CategoriesService {
-  constructor(private readonly categoriesRepo: CategoriesRepository) {}
+  constructor(
+    private readonly categoriesRepo: CategoriesRepository,
+    private readonly cacheService: CacheService,
+  ) {}
 
   // ساخت دسته‌بندی جدید
   async create(dto: CreateCategoryDto): Promise<Category> {
@@ -41,7 +45,12 @@ export class CategoriesService {
       parent,
     });
 
-    return this.categoriesRepo.save(category);
+    const saved = await this.categoriesRepo.save(category);
+
+    // Invalidate category cache after creation
+    await this.cacheService.invalidatePattern('categories:*');
+
+    return saved;
   }
 
   // دریافت همه دسته‌بندی‌ها به صورت درختی (فقط ریشه‌ها با فرزندان)
@@ -51,7 +60,15 @@ export class CategoriesService {
 
   // دریافت لیست ساده همه دسته‌بندی‌ها
   async findAll(): Promise<Category[]> {
-    return this.categoriesRepo.findAll();
+    const cacheKey = CacheService.categoriesKey();
+    const cached = await this.cacheService.get<Category[]>(cacheKey);
+    if (cached) return cached;
+
+    const result = await this.categoriesRepo.findAll();
+
+    // Cache categories for 30 minutes (they change very infrequently)
+    await this.cacheService.set(cacheKey, result, 1800);
+    return result;
   }
 
   // دریافت یک دسته‌بندی با آیدی
@@ -107,7 +124,11 @@ export class CategoriesService {
     if (dto.slug !== undefined) category.slug = dto.slug;
     category.parent = parent;
 
-    return this.categoriesRepo.save(category);
+    const saved = await this.categoriesRepo.save(category);
+
+    // Invalidate category cache after update
+    await this.cacheService.invalidatePattern('categories:*');
+    return saved;
   }
 
   // حذف دسته‌بندی
@@ -125,5 +146,8 @@ export class CategoriesService {
     }
 
     await this.categoriesRepo.remove(category);
+
+    // Invalidate category cache after delete
+    await this.cacheService.invalidatePattern('categories:*');
   }
 }

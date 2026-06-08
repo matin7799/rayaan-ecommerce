@@ -25,6 +25,9 @@ import { ProductMedia } from './product-media.entity';
 @Index(['sku'], { unique: true })
 @Index(['isActive', 'isOnSale'])
 @Index(['brandId'])
+@Index(['name'])
+@Index(['createdAt'])
+@Index(['isActive', 'createdAt'])
 export class Product {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

@@ -36,6 +36,7 @@ export interface ProductCardItem {
   badge?: string;
   isBestSeller?: boolean;
   inStock: boolean;
+  isUnavailable?: boolean;
   isNew?: boolean;
   specs?: { label: string; value: string }[];
   shortDescription?: string;

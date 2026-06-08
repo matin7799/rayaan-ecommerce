@@ -4,7 +4,7 @@ import { Injectable, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import Redis from 'ioredis';
-import { REDIS_CLIENT } from '../../shared/redis/redis.module';
+import { REDIS_CLIENT } from '../../shared/redis/redis.constants';
 import { CartSnapshot } from './entities/cart-snapshot.entity';
 import type { ICart, ICartItem } from './interfaces';
 

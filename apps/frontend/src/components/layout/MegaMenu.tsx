@@ -194,8 +194,9 @@ export function MegaMenu() {
                 {parentCategories.map((cat) => {
                   const Icon = getIcon(cat.slug);
                   return (
-                  <button
+                  <Link
                     key={cat.id}
+                    href={`/products/category/${cat.slug}`}
                     onMouseEnter={() => setHoveredCategory(cat)}
                     className={`flex items-center justify-between w-full px-4 py-3 rounded-2xl text-sm font-semibold transition-all duration-300 relative group
                       ${activeCategory?.id === cat.id
@@ -212,7 +213,7 @@ export function MegaMenu() {
                     {activeCategory?.id === cat.id && (
                       <ChevronRight className="w-4 h-4 animate-in slide-in-from-left-2 opacity-80" />
                     )}
-                  </button>
+                  </Link>
                   );
                 })}
               </div>

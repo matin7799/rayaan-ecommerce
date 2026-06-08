@@ -142,18 +142,13 @@ export function useDirectRegister() {
   });
 }
 
+import { performBulletproofLogout } from '@/utils/logout';
+
 /**
  * خروج از حساب
  */
 export function useLogout() {
-  const { logout: logoutStore } = useAuthStore();
-  const router = useRouter();
-
   return useMutation({
-    mutationFn: () => authService.logout(),
-    onSuccess: () => {
-      logoutStore();
-      router.push('/login');
-    },
+    mutationFn: () => performBulletproofLogout(),
   });
 }

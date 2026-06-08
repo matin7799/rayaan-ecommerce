@@ -4,6 +4,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
+import { Role } from '../auth/enums/role.enum';
 
 @Injectable()
 export class UsersRepository {
@@ -46,5 +47,31 @@ export class UsersRepository {
   async update(id: string, data: Partial<User>): Promise<User | null> {
     await this.repo.update(id, data);
     return this.findById(id);
+  }
+
+  async findAllForAdmin(limit = 100): Promise<Omit<User, 'password'>[]> {
+    return this.repo.find({
+      select: [
+        'id',
+        'phone',
+        'email',
+        'firstName',
+        'lastName',
+        'role',
+        'status',
+        'createdAt',
+        'updatedAt',
+      ],
+      order: { createdAt: 'DESC' },
+      take: limit,
+    });
+  }
+
+  async updateRole(
+    userId: string,
+    role: Role,
+  ): Promise<Omit<User, 'password'> | null> {
+    await this.repo.update(userId, { role });
+    return this.findByIdSafe(userId);
   }
 }

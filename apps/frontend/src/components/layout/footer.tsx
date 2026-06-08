@@ -5,10 +5,10 @@ import {
   Phone, 
   
   HeadphonesIcon, 
-  MessageCircle, 
   Send,
   ChevronLeft,
-  ShieldCheck
+  ShieldCheck,
+  SquareRoundCorner
 } from "lucide-react";
 
 export default function Footer() {
@@ -44,10 +44,10 @@ export default function Footer() {
               <div className="p-2 bg-[#008080]/10 rounded-xl text-[#008080]">
                 <MapPin className="w-5 h-5" />
               </div>
-              شعبه بلوار جوان
+              شعبه جوان
             </h4>
             <address className="not-italic text-sm text-gray-600 dark:text-gray-400 leading-relaxed mb-6">
-              میدان عالم به سمت دانش‌آموز، بعد از پل عابر پیاده
+              میدان عالم به سمت میدان دانش‌آموز، بعد از پل عابر پیاده
             </address>
             <div className="space-y-3">
               <a href="tel:09134300916" className="flex items-center justify-between p-2 rounded-xl hover:bg-white dark:hover:bg-gray-950 hover:shadow-sm transition-all group/phone">
@@ -62,7 +62,7 @@ export default function Footer() {
                 <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 group-hover/phone:text-[#008080]">
                   <Phone className="w-4 h-4" />
                   <span className="font-medium dir-ltr">0913 430 0926</span>
-                  <span className="text-xs bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded-md">عرفان حاتفی</span>
+                  <span className="text-xs bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded-md">عرفان هاتفی</span>
                 </div>
                 <ChevronLeft className="w-4 h-4 text-gray-300 opacity-0 group-hover/phone:opacity-100 group-hover/phone:-translate-x-1 transition-all" />
               </a>
@@ -123,7 +123,7 @@ export default function Footer() {
             </div>
 
             {/* کارت مدیریت */}
-            <div className="group p-4 rounded-2xl bg-gradient-to-b from-purple-50/50 to-transparent dark:from-purple-900/10 border border-purple-100 dark:border-purple-800/30 hover:shadow-lg hover:shadow-purple-500/5 transition-all">
+            <div className="group p-4 rounded-2xl bg-linear-to-b from-purple-50/50 to-transparent dark:from-purple-900/10 border border-purple-100 dark:border-purple-800/30 hover:shadow-lg hover:shadow-purple-500/5 transition-all">
               <h4 className="text-base font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2 mb-3">
                 <div className="p-1.5 bg-purple-500/10 rounded-lg text-purple-500">
                   <ShieldCheck className="w-4 h-4" />
@@ -161,31 +161,31 @@ export default function Footer() {
               <span className="text-sm font-bold text-gray-900 dark:text-gray-100 rtl:ml-2">با ما همراه باشید:</span>
               
               {/* Instagram */}
-              <a href="#" target="_blank" rel="noreferrer" className="group relative w-11 h-11 rounded-2xl bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-500 flex items-center justify-center text-white hover:scale-110 hover:-translate-y-1 transition-all shadow-lg shadow-pink-500/20">
+              <a href="https://instagram.com/rayaantech" target="_blank" rel="noreferrer" className="group relative w-11 h-11 rounded-2xl bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-500 flex items-center justify-center text-white hover:scale-110 hover:-translate-y-1 transition-all shadow-lg shadow-pink-500/20">
                 <div className="absolute inset-0 bg-white/20 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
-                <MessageCircle className="w-5 h-5 relative z-10" />
+                <SquareRoundCorner className="w-5 h-5 relative z-10" />
               </a>
               
               {/* Telegram */}
-              <a href="#" target="_blank" rel="noreferrer" className="group relative w-11 h-11 rounded-2xl bg-[#229ED9] flex items-center justify-center text-white hover:scale-110 hover:-translate-y-1 transition-all shadow-lg shadow-blue-500/20">
+              <a href="https://telegram.com/rayaantech_yazd/" target="_blank" rel="noreferrer" className="group relative w-11 h-11 rounded-2xl bg-[#229ED9] flex items-center justify-center text-white hover:scale-110 hover:-translate-y-1 transition-all shadow-lg shadow-blue-500/20">
                 <div className="absolute inset-0 bg-white/20 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
                 <Send className="w-5 h-5 -ml-1 relative z-10" />
               </a>
 
               {/* Eitaa */}
-              <a href="#" target="_blank" rel="noreferrer" className="group relative px-4 h-11 rounded-2xl bg-gradient-to-r from-[#F26B22] to-[#ff8c4e] flex items-center justify-center text-white hover:scale-105 hover:-translate-y-1 transition-all shadow-lg shadow-orange-500/20 font-extrabold text-sm tracking-widest">
+              <a href="https://eitaa.com/rayaantech_yazd/" target="_blank" rel="noreferrer" className="group relative px-4 h-11 rounded-2xl bg-gradient-to-r from-[#F26B22] to-[#ff8c4e] flex items-center justify-center text-white hover:scale-105 hover:-translate-y-1 transition-all shadow-lg shadow-orange-500/20 font-extrabold text-sm tracking-widest">
                 <div className="absolute inset-0 bg-white/20 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
                 <span className="relative z-10">ایتا</span>
               </a>
 
               {/* Bale */}
-              <a href="#" target="_blank" rel="noreferrer" className="group relative px-4 h-11 rounded-2xl bg-gradient-to-r from-[#28A745] to-[#34ce57] flex items-center justify-center text-white hover:scale-105 hover:-translate-y-1 transition-all shadow-lg shadow-green-500/20 font-extrabold text-sm tracking-widest">
+              <a href="https://ble.ir/rayaantech_yazd/" target="_blank" rel="noreferrer" className="group relative px-4 h-11 rounded-2xl bg-gradient-to-r from-[#28A745] to-[#34ce57] flex items-center justify-center text-white hover:scale-105 hover:-translate-y-1 transition-all shadow-lg shadow-green-500/20 font-extrabold text-sm tracking-widest">
                 <div className="absolute inset-0 bg-white/20 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
                 <span className="relative z-10">بله</span>
               </a>
 
               {/* Rubika */}
-              <a href="#" target="_blank" rel="noreferrer" className="group relative px-4 h-11 rounded-2xl bg-gradient-to-r from-[#8E24AA] to-[#ab30cc] flex items-center justify-center text-white hover:scale-105 hover:-translate-y-1 transition-all shadow-lg shadow-purple-500/20 font-extrabold text-sm tracking-widest">
+              <a href="https://rubika.ir/rayaantech_yazd" target="_blank" rel="noreferrer" className="group relative px-4 h-11 rounded-2xl bg-gradient-to-r from-[#8E24AA] to-[#ab30cc] flex items-center justify-center text-white hover:scale-105 hover:-translate-y-1 transition-all shadow-lg shadow-purple-500/20 font-extrabold text-sm tracking-widest">
                 <div className="absolute inset-0 bg-white/20 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
                 <span className="relative z-10">روبیکا</span>
               </a>

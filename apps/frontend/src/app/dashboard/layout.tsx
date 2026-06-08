@@ -2,16 +2,18 @@
 
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
-import { User, ShoppingBag, MapPin, LogOut, ChevronLeft, ShieldCheck, Package, CreditCard } from 'lucide-react';
+import { User, ShoppingBag, MapPin, LogOut, ChevronLeft, ShieldCheck, Package, CreditCard, Users, Image as ImageIcon, Sparkles } from 'lucide-react';
 import { Header } from '@/components/layout/header';
 import { useAuthStore } from '@/lib/store/auth-store';
 import { cn } from '@/lib/utils';
 import { useEffect } from 'react';
 
+import { performBulletproofLogout } from '@/utils/logout';
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { user, logout } = useAuthStore();
+  const { user } = useAuthStore();
 
   const isAdmin = ['admin', 'super_admin'].includes(String(user?.role ?? '').toLowerCase());
   const isAdminRoute = pathname.startsWith('/dashboard/admin');
@@ -33,15 +35,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     ...(isAdmin
       ? [
           { title: 'ادمین سفارش‌ها', href: '/dashboard/admin/orders', icon: ShieldCheck },
+          { title: 'ادمین کاربران', href: '/dashboard/admin/users', icon: Users },
           { title: 'ادمین محصولات', href: '/dashboard/admin/products', icon: Package },
           { title: 'ادمین پرداخت‌ها', href: '/dashboard/admin/payments', icon: CreditCard },
+          { title: 'ادمین بنرها', href: '/dashboard/admin/banners', icon: ImageIcon },
+          { title: 'ادمین استوری‌ها', href: '/dashboard/admin/stories', icon: Sparkles },
         ]
       : []),
   ];
 
+
   const handleLogout = () => {
-    logout();
-    router.push('/login');
+    performBulletproofLogout();
   };
 
   return (

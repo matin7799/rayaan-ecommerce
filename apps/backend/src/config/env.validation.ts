@@ -80,6 +80,80 @@ class EnvironmentVariables {
   @IsString()
   @IsOptional()
   SMS_API_KEY?: string;
+
+  @IsString()
+  @IsOptional()
+  SSL_KEY_PATH?: string;
+
+  @IsString()
+  @IsOptional()
+  SSL_CERT_PATH?: string;
+
+  // SMS Providers Configuration
+  @IsString()
+  @IsOptional()
+  MELIPAYAMAK_USERNAME?: string;
+
+  @IsString()
+  @IsOptional()
+  MELIPAYAMAK_PASSWORD?: string;
+
+  @IsString()
+  @IsOptional()
+  MELIPAYAMAK_FROM?: string;
+
+  @IsString()
+  @IsOptional()
+  MELIPAYAMAK_OTP_BODY_ID?: string;
+
+  @IsString()
+  @IsOptional()
+  MELIPAYAMAK_PATTERN_API_URL?: string;
+
+  @IsString()
+  @IsOptional()
+  SMSIR_API_KEY?: string;
+
+  @IsNumber()
+  @IsOptional()
+  SMSIR_OTP_TEMPLATE_ID?: number;
+
+  @IsString()
+  @IsOptional()
+  SMSIR_OTP_PARAMETER_NAME?: string;
+
+  // DigiPay Configuration
+  @IsBoolean()
+  @IsOptional()
+  DIGIPAY_SANDBOX?: boolean;
+
+  @IsString()
+  @IsOptional()
+  DIGIPAY_CLIENT_ID?: string;
+
+  @IsString()
+  @IsOptional()
+  DIGIPAY_CLIENT_SECRET?: string;
+
+  @IsString()
+  @IsOptional()
+  DIGIPAY_USERNAME?: string;
+
+  @IsString()
+  @IsOptional()
+  DIGIPAY_PASSWORD?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  DIGIPAY_MOCK_MODE?: boolean;
+
+  @IsString()
+  @IsOptional()
+  DIGIPAY_SELLER_ID?: string;
+
+  @IsString()
+  @IsOptional()
+  DIGIPAY_SUPPLIER_ID?: string;
 }
 
 export function validate(config: Record<string, unknown>) {

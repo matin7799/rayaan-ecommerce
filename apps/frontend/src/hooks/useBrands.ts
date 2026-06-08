@@ -1,5 +1,5 @@
 // src/hooks/useBrands.ts
-import { getBrands } from '@/services/api/catalog.service';
+import { getBrands } from '@/services/catalog.service';
 import { useQuery } from '@tanstack/react-query';
 
 

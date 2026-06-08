@@ -12,6 +12,10 @@ export interface PriceDiscount {
 export interface PriceBreakdown {
   basePrice: number;
   finalPrice: number;
+  salePrice?: number | null;
+  sale_price?: number | null;
+  isOnSale?: boolean;
+  is_on_sale?: boolean;
   discounts: PriceDiscount[];
   savings: number;
   savingsPercent: number;

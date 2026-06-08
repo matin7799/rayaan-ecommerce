@@ -14,7 +14,8 @@ export const AppDataSource = new DataSource({
   ssl:
     process.env.DB_SSL === 'true'
       ? {
-          rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false',
+          rejectUnauthorized:
+            process.env.DB_SSL_REJECT_UNAUTHORIZED !== 'false',
         }
       : false,
 

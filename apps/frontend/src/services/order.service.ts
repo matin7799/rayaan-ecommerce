@@ -36,6 +36,13 @@ export interface Order {
   shipping_method_id: string | null;
   created_at: string;
   updated_at: string;
+  user_summary?: {
+    id: string;
+    full_name: string;
+    phone: string;
+    role: string;
+  };
+  items_count?: number;
 }
 
 export interface OrderCancelRequest {

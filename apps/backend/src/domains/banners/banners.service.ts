@@ -6,17 +6,22 @@ import { Repository } from 'typeorm';
 import { Banner, BannerPosition } from './entities/banner.entity';
 import { CreateBannerDto } from './dto/create-banner.dto';
 import { UpdateBannerDto } from './dto/update-banner.dto';
+import { CacheService } from '../../shared/redis/cache.service';
 
 @Injectable()
 export class BannersService {
   constructor(
     @InjectRepository(Banner)
     private readonly bannerRepository: Repository<Banner>,
+    private readonly cacheService: CacheService,
   ) {}
 
   async create(createBannerDto: CreateBannerDto): Promise<Banner> {
     const banner = this.bannerRepository.create(createBannerDto);
-    return await this.bannerRepository.save(banner);
+    const saved = await this.bannerRepository.save(banner);
+    // Invalidate banner cache on create
+    await this.cacheService.invalidatePattern('banners:*');
+    return saved;
   }
 
   async findAll(): Promise<Banner[]> {
@@ -40,8 +45,12 @@ export class BannersService {
   }
 
   async findByPosition(position: BannerPosition): Promise<Banner[]> {
+    const cacheKey = CacheService.bannersKey(position);
+    const cached = await this.cacheService.get<Banner[]>(cacheKey);
+    if (cached) return cached;
+
     const now = new Date();
-    return await this.bannerRepository
+    const result = await this.bannerRepository
       .createQueryBuilder('banner')
       .where('banner.position = :position', { position })
       .andWhere('banner.is_active = :isActive', { isActive: true })
@@ -51,6 +60,10 @@ export class BannersService {
       .andWhere('(banner.end_date IS NULL OR banner.end_date >= :now)', { now })
       .orderBy('banner.order', 'ASC')
       .getMany();
+
+    // Cache banners for 5 minutes (they change infrequently)
+    await this.cacheService.set(cacheKey, result, 300);
+    return result;
   }
 
   async findOne(id: string): Promise<Banner> {
@@ -64,12 +77,17 @@ export class BannersService {
   async update(id: string, updateBannerDto: UpdateBannerDto): Promise<Banner> {
     const banner = await this.findOne(id);
     Object.assign(banner, updateBannerDto);
-    return await this.bannerRepository.save(banner);
+    const saved = await this.bannerRepository.save(banner);
+    // Invalidate banner cache after update
+    await this.cacheService.invalidatePattern('banners:*');
+    return saved;
   }
 
   async remove(id: string): Promise<void> {
     const banner = await this.findOne(id);
     await this.bannerRepository.remove(banner);
+    // Invalidate banner cache on delete
+    await this.cacheService.invalidatePattern('banners:*');
   }
 
   async incrementView(id: string): Promise<void> {

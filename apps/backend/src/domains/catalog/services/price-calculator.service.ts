@@ -40,15 +40,20 @@ export class PriceCalculatorService {
     const hasSalePrice =
       product.salePrice !== null && product.salePrice !== undefined;
     const shouldApplySale =
-      (channel === PricingChannel.TOROB && hasSalePrice) ||
+      ((channel === PricingChannel.TOROB ||
+        channel === PricingChannel.PARTNER) &&
+        hasSalePrice) ||
       this.isSaleActive(product, now);
 
     if (shouldApplySale && hasSalePrice) {
       const salePrice = this.roundCurrency(Number(product.salePrice));
       const saleDiscountAmount = this.roundCurrency(basePrice - salePrice);
 
-      if (channel === PricingChannel.TOROB) {
-        // Business rule: Torob users always see sale_price when it exists.
+      if (
+        channel === PricingChannel.TOROB ||
+        channel === PricingChannel.PARTNER
+      ) {
+        // Business rule: Torob and partner users always see sale_price when it exists.
         currentPrice = salePrice;
       } else if (saleDiscountAmount > 0) {
         currentPrice = salePrice;
@@ -128,6 +133,10 @@ export class PriceCalculatorService {
     return {
       basePrice,
       finalPrice,
+      salePrice: product.salePrice ?? null,
+      sale_price: product.salePrice ?? null,
+      isOnSale: product.isOnSale,
+      is_on_sale: product.isOnSale,
       discounts,
       savings,
       savingsPercent: this.calculatePercent(savings, basePrice),

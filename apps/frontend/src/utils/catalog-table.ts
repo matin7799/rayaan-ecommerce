@@ -2,7 +2,7 @@ import type {
   CatalogFilters,
   CatalogResponse,
   Product,
-} from '@/services/api/catalog.service';
+} from '@/services/catalog.service';
 import type {
   CatalogTableApiFilters,
   CatalogTableQueryState,
@@ -31,9 +31,17 @@ const toPositiveNumber = (value: string | null, fallback?: number): number | und
 export function parseCatalogTableSearchParams(
   searchParams: URLSearchParams,
 ): CatalogTableQueryState {
+  const legacyCategory = searchParams.get('category');
+  const legacySubcategory = searchParams.get('subcategory');
+  const categorySlugs = [
+    ...searchParams.getAll('category'),
+    ...searchParams.getAll('categorySlugs'),
+    ...(legacyCategory ? [legacyCategory] : []),
+    ...(legacySubcategory ? [legacySubcategory] : []),
+  ].filter(Boolean);
+
   return {
-    category: searchParams.get('category') || undefined,
-    subcategory: searchParams.get('subcategory') || undefined,
+    categorySlugs: Array.from(new Set(categorySlugs)),
     brandSlugs: searchParams.getAll('brand'),
     search: searchParams.get('search') || undefined,
     minPrice: toPositiveNumber(searchParams.get('minPrice')),
@@ -51,15 +59,10 @@ export function parseCatalogTableSearchParams(
 
 export function buildCatalogTableFilters(
   state: CatalogTableQueryState,
-  enableSubcategoryFilter: boolean,
+  _enableSubcategoryFilter: boolean,
 ): CatalogTableApiFilters {
   const resolvedSortBy =
     state.sortBy === 'stockQuantity' ? 'createdAt' : state.sortBy;
-
-  const categorySlugs = [
-    state.category,
-    enableSubcategoryFilter ? state.subcategory : undefined,
-  ].filter(Boolean) as string[];
 
   return {
     page: state.page,
@@ -69,8 +72,7 @@ export function buildCatalogTableFilters(
     maxPrice: state.maxPrice,
     sortBy: resolvedSortBy,
     sortOrder: state.sortOrder,
-    category: state.category,
-    categorySlugs: categorySlugs.length > 0 ? categorySlugs : undefined,
+    categorySlugs: state.categorySlugs.length > 0 ? state.categorySlugs : undefined,
     brandSlugs: state.brandSlugs.length > 0 ? state.brandSlugs : undefined,
   };
 }
@@ -91,23 +93,36 @@ const getMainAndSubCategory = (product: Product): { mainCategory: string; subcat
 };
 
 const getCollaboratorPrice = (product: Product): number | undefined => {
-  const partnerDiscount = product.pricing.discounts.find(
-    (discount) => discount.type === 'PARTNER',
-  );
-
-  if (!partnerDiscount) {
+  const toPositiveNumber = (value: unknown): number | undefined => {
+    if (typeof value === 'number') return value > 0 ? value : undefined;
+    if (typeof value === 'string') {
+      const normalized = value.replace(/,/g, '').trim();
+      if (!normalized) return undefined;
+      const parsed = Number(normalized);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+    }
     return undefined;
+  };
+
+  const directSalePrice =
+    toPositiveNumber((product as Product & { salePrice?: unknown }).salePrice) ??
+    toPositiveNumber((product as Product & { sale_price?: unknown }).sale_price) ??
+    toPositiveNumber(product.pricing.salePrice) ??
+    toPositiveNumber(product.pricing.sale_price);
+
+  if (typeof directSalePrice === 'number') {
+    return directSalePrice;
   }
 
-  if (partnerDiscount.percent && partnerDiscount.percent > 0) {
-    return Math.max(
-      0,
-      Math.round(product.pricing.basePrice * (1 - partnerDiscount.percent / 100)),
-    );
-  }
-
-  if (partnerDiscount.amount && partnerDiscount.amount > 0) {
-    return Math.max(0, product.pricing.basePrice - partnerDiscount.amount);
+  const hasSaleDiscount = product.pricing.discounts.some(
+    (discount) => discount.type === 'SALE',
+  );
+  if (
+    hasSaleDiscount &&
+    product.pricing.finalPrice > 0 &&
+    product.pricing.finalPrice < product.pricing.basePrice
+  ) {
+    return product.pricing.finalPrice;
   }
 
   return undefined;
@@ -123,6 +138,7 @@ export function mapCatalogProductToTableRow(product: Product): CatalogTableRow {
     resolveImageUrl(product.images?.[0]) ||
     PLACEHOLDER_IMAGE;
   const { mainCategory, subcategory } = getMainAndSubCategory(product);
+  const isInStock = product.stockQuantity > 0;
 
   return {
     id: product.id,
@@ -141,7 +157,7 @@ export function mapCatalogProductToTableRow(product: Product): CatalogTableRow {
         : undefined,
     collaboratorPrice: getCollaboratorPrice(product),
     stockQuantity: product.stockQuantity,
-    isInStock: product.stockQuantity > 0,
+    isInStock,
     createdAt: product.createdAt,
     updatedAt: product.updatedAt,
   };
@@ -149,9 +165,12 @@ export function mapCatalogProductToTableRow(product: Product): CatalogTableRow {
 
 export function mapCatalogTableResult(data: CatalogResponse): CatalogTableResult {
   const resolved = toCatalogResponse(data);
+  const rows = resolved.data
+    .map(mapCatalogProductToTableRow)
+    .sort((left, right) => Number(left.isInStock) - Number(right.isInStock));
 
   return {
-    rows: resolved.data.map(mapCatalogProductToTableRow),
+    rows,
     rawItems: resolved.data,
     meta: {
       currentPage: resolved.meta.page,

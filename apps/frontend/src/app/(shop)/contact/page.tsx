@@ -29,12 +29,12 @@ export default function ContactPage() {
               <div className="flex items-center gap-3 bg-white dark:bg-zinc-800 p-3 rounded-xl">
                 <UserCircle className="text-zinc-400" />
                 <span className="font-medium">احسان رضایی</span>
-                <span className="mr-auto font-mono text-left" dir="ltr">0913 430 0916</span>
+                <span className="mr-auto  text-left" dir="ltr">0913 430 0916</span>
               </div>
               <div className="flex items-center gap-3 bg-white dark:bg-zinc-800 p-3 rounded-xl">
                 <UserCircle className="text-zinc-400" />
                 <span className="font-medium">عرفان هاتفی</span>
-                <span className="mr-auto font-mono text-left" dir="ltr">0913 430 0926</span>
+                <span className="mr-auto  text-left" dir="ltr">0913 430 0926</span>
               </div>
             </div>
           </div>
@@ -46,12 +46,12 @@ export default function ContactPage() {
               <div className="flex items-center gap-3 bg-white dark:bg-zinc-800 p-3 rounded-xl">
                 <UserCircle className="text-zinc-400" />
                 <span className="font-medium">محسن رضایی</span>
-                <span className="mr-auto font-mono text-left" dir="ltr">0913 438 8606</span>
+                <span className="mr-auto  text-left" dir="ltr">0913 438 8606</span>
               </div>
               <div className="flex items-center gap-3 bg-white dark:bg-zinc-800 p-3 rounded-xl">
                 <UserCircle className="text-zinc-400" />
                 <span className="font-medium">رسام کریمی</span>
-                <span className="mr-auto font-mono text-left" dir="ltr">0913 438 8636</span>
+                <span className="mr-auto  text-left" dir="ltr">0913 438 8636</span>
               </div>
             </div>
           </div>
@@ -70,7 +70,7 @@ export default function ContactPage() {
             <div className="flex items-center gap-3 bg-white/60 dark:bg-zinc-900/60 p-4 rounded-xl">
               <UserCircle className="text-emerald-600" />
               <span className="font-medium">محمد تقوی</span>
-              <span className="mr-auto font-mono font-bold text-left" dir="ltr">0935 255 5519</span>
+              <span className="mr-auto  font-bold text-left" dir="ltr">0935 255 5519</span>
             </div>
           </div>
 
@@ -81,7 +81,7 @@ export default function ContactPage() {
             <div className="flex items-center gap-3 bg-white/60 dark:bg-zinc-900/60 p-4 rounded-xl">
               <UserCircle className="text-primary" />
               <span className="font-medium">علیرضا حاتمی</span>
-              <span className="mr-auto font-mono font-bold text-left" dir="ltr">0913 151 2790</span>
+              <span className="mr-auto  font-bold text-left" dir="ltr">0913 151 2790</span>
             </div>
           </div>
 
@@ -90,7 +90,7 @@ export default function ContactPage() {
             <Share2 className="w-8 h-8 mx-auto opacity-80" />
             <h3 className="text-xl font-bold">شبکه‌های اجتماعی ما</h3>
             <p className="text-blue-100 text-sm">در روبیکا، بله، ایتا و تلگرام همراه ما باشید</p>
-            <div className="inline-block bg-white/20 backdrop-blur-md px-6 py-2 rounded-full font-mono text-lg font-bold border border-white/30">
+            <div className="inline-block bg-white/20 backdrop-blur-md px-6 py-2 rounded-full  text-lg font-bold border border-white/30">
               @rayaantech_yazd
             </div>
           </div>

@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { getCatalogProducts } from '@/services/api/catalog.service';
+import { getCatalogTableProducts } from '@/services/catalog.service';
 import { catalogTableConfig, type CatalogTableQueryState } from '@/types/catalog-table';
 import {
   buildCatalogTableFilters,
@@ -28,7 +28,7 @@ export function useCatalogTableQuery() {
 
   const query = useQuery({
     queryKey: ['catalog-table-products', filters],
-    queryFn: () => getCatalogProducts(filters),
+    queryFn: () => getCatalogTableProducts(filters),
     select: mapCatalogTableResult,
     placeholderData: (prev) => prev,
     staleTime: 2 * 60 * 1000,
@@ -47,10 +47,13 @@ export function useCatalogTableQuery() {
   ) => {
     updateState((params) => {
       const keyName = String(key);
-      if (keyName === 'brandSlugs') {
+      if (keyName === 'brandSlugs' || keyName === 'categorySlugs') {
+        const paramKey = keyName === 'brandSlugs' ? 'brand' : 'category';
         params.delete('brand');
+        params.delete('category');
+        params.delete('subcategory');
         (Array.isArray(value) ? value : []).forEach((item) => {
-          if (item) params.append('brand', item);
+          if (item) params.append(paramKey, item);
         });
         params.delete('page');
         return;
@@ -72,10 +75,13 @@ export function useCatalogTableQuery() {
       Object.entries(updates).forEach(([key, rawValue]) => {
         const value = rawValue as CatalogTableQueryState[keyof CatalogTableQueryState];
 
-        if (key === 'brandSlugs') {
+        if (key === 'brandSlugs' || key === 'categorySlugs') {
+          const paramKey = key === 'brandSlugs' ? 'brand' : 'category';
           params.delete('brand');
+          params.delete('category');
+          params.delete('subcategory');
           (Array.isArray(value) ? value : []).forEach((item) => {
-            if (item) params.append('brand', item);
+            if (item) params.append(paramKey, item);
           });
           return;
         }
@@ -96,6 +102,7 @@ export function useCatalogTableQuery() {
     updateState((params) => {
       [
         'category',
+        'categorySlugs',
         'subcategory',
         'brand',
         'search',

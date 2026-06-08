@@ -4,18 +4,15 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
-import { SelectQueryBuilder } from 'typeorm';
 import type { Request } from 'express';
 
 import { User } from '../../users/entities/user.entity';
-import { Media, MediaType } from '../../media/entities/media.entity';
+import { MediaType } from '../../media/entities/media.entity';
 import { MediaService } from '../../media/media.service';
 
 import {
   CatalogListResponseDto,
   ProductDetailResponseDto,
-  ProductListResponseDto,
-  ProductMediaItemDto,
 } from '../dto/product-response.dto';
 import {
   QueryCatalogDto,
@@ -40,17 +37,28 @@ import { ProductAttribute } from '../entities/product-attribute.entity';
 import { ProductOption } from '../entities/product-option.entity';
 import { PriceBreakdown } from '../interfaces/pricing.interface';
 import { isTorobAttributed } from '../../../common/utils/torob-attribution.util';
+import { Role } from '../../auth/enums/role.enum';
+import { CacheService } from '../../../shared/redis/cache.service';
+import { CatalogInvalidationService } from './catalog-invalidation.service';
+import { DynamicTtlHelper } from './dynamic-ttl.helper';
+import {
+  toProductListResponse,
+  toProductDetailResponse,
+  pickThumbnail,
+} from './catalog-mapper';
+import {
+  applyFilters,
+  applySorting,
+  addCatalogHiddenSelects,
+  addPricingSelects,
+  generateUniqueSlug,
+} from './catalog-query.helper';
 
 export interface CatalogMeta {
   page: number;
   limit: number;
   total: number;
   totalPages: number;
-}
-
-export interface CatalogListResponse {
-  data: ProductListResponseDto[];
-  meta: CatalogMeta;
 }
 
 @Injectable()
@@ -60,21 +68,36 @@ export class CatalogService {
     private readonly priceCalculator: PriceCalculatorService,
     private readonly mediaService: MediaService,
     private readonly configService: ConfigService,
+    private readonly cacheService: CacheService,
+    private readonly catalogInvalidationService: CatalogInvalidationService,
   ) {}
 
   async createProduct(
     dto: CreateProductDto,
   ): Promise<ProductDetailResponseDto> {
-    const existingProduct = await this.productsRepository.findBySlug(dto.slug);
-
-    if (existingProduct) {
-      throw new BadRequestException('Product with this slug already exists');
-    }
-
     const existingSku = await this.productsRepository.findBySku(dto.sku);
     if (existingSku) {
       throw new BadRequestException('Product with this sku already exists');
     }
+
+    const normalizedSlug = dto.slug.trim().toLowerCase();
+    const existingProduct =
+      await this.productsRepository.findBySlug(normalizedSlug);
+
+    let finalSlug = normalizedSlug;
+
+    if (existingProduct && existingProduct.sku !== dto.sku.trim()) {
+      finalSlug = await generateUniqueSlug(
+        this.productsRepository,
+        normalizedSlug,
+        dto.sku,
+      );
+    } else if (existingProduct) {
+      throw new BadRequestException('Product with this slug already exists');
+    }
+
+    dto.slug = finalSlug;
+
     if (
       dto.sale_price !== undefined &&
       dto.sale_price !== null &&
@@ -107,35 +130,17 @@ export class CatalogService {
       throw new BadRequestException('At least one category_slug is required');
     }
 
-    /**
-     * Brand:
-     * اگر slug ارسال شده باشد:
-     * - اگر وجود داشت همان را برمی‌گرداند
-     * - اگر وجود نداشت می‌سازد
-     */
     const brand = normalizedBrandSlug
       ? await this.productsRepository.findOrCreateBrandBySlug(
           normalizedBrandSlug,
         )
       : null;
 
-    /**
-     * Categories:
-     * همه category slugها را می‌گیرد.
-     * موجودها را پیدا می‌کند.
-     * ناموجودها را می‌سازد.
-     */
     const categories =
       await this.productsRepository.findOrCreateCategoriesBySlugs(
         normalizedCategorySlugs,
       );
 
-    /**
-     * Tags:
-     * اگر tag_slugs ارسال شده باشد:
-     * - موجودها را پیدا می‌کند
-     * - ناموجودها را می‌سازد
-     */
     const tags = normalizedTagSlugs.length
       ? await this.productsRepository.findOrCreateTagsBySlugs(
           normalizedTagSlugs,
@@ -157,10 +162,6 @@ export class CatalogService {
       media: sharedMedia,
     });
 
-    /**
-     * Media URLs:
-     * اگر thumbnail_url با یکی از images یکی بود، duplicate حذف می‌شود.
-     */
     const thumbnailUrl = dto.thumbnail_url?.trim();
 
     const galleryUrls = (dto.images ?? [])
@@ -202,8 +203,16 @@ export class CatalogService {
     }
 
     const media = await this.mediaService.getProductMedia(loadedProduct.id);
+    const pricing = this.priceCalculator.calculatePrice(loadedProduct, {
+      user: undefined,
+      channel: PricingChannel.PUBLIC,
+    });
 
-    return this.toProductDetailResponse(loadedProduct, media, undefined);
+    await this.catalogInvalidationService
+      .invalidateProductCache(loadedProduct.slug)
+      .catch(() => {});
+
+    return toProductDetailResponse(loadedProduct, media, pricing);
   }
 
   async findAll(
@@ -211,6 +220,29 @@ export class CatalogService {
     user?: User,
     req?: Request,
   ): Promise<CatalogListResponseDto> {
+    const isPublicRequest =
+      !user &&
+      !req?.headers?.cookie?.includes('auth') &&
+      !req?.headers?.authorization;
+    const isSimpleList =
+      !query.search &&
+      !query.minPrice &&
+      !query.maxPrice &&
+      !query.brandSlugs?.length &&
+      !query.tagSlugs?.length;
+
+    const pricingChannel = this.resolvePricingChannel(req, user);
+
+    if (isPublicRequest && isSimpleList) {
+      const cacheKey = CacheService.catalogListKey(
+        query as unknown as Record<string, unknown>,
+        pricingChannel,
+      );
+      const cached =
+        await this.cacheService.get<CatalogListResponseDto>(cacheKey);
+      if (cached) return cached;
+    }
+
     try {
       const page = query.page ?? 1;
       const limit = query.limit ?? 20;
@@ -224,9 +256,9 @@ export class CatalogService {
         .leftJoinAndSelect('variant.options', 'variantOption')
         .leftJoinAndSelect('variant.inventory', 'inventory');
 
-      this.addCatalogHiddenSelects(queryBuilder);
-      this.applyFilters(queryBuilder, query);
-      this.applySorting(
+      addCatalogHiddenSelects(queryBuilder);
+      applyFilters(queryBuilder, query);
+      applySorting(
         queryBuilder,
         query.sortBy ?? SortField.CREATED_AT,
         query.sortOrder ?? SortOrder.DESC,
@@ -246,20 +278,21 @@ export class CatalogService {
           ? await this.mediaService.getProductMediaMap(productIds)
           : {};
 
-      const pricingChannel = isTorobAttributed(req)
-        ? PricingChannel.TOROB
-        : PricingChannel.PUBLIC;
+      const pricingChannel = this.resolvePricingChannel(req, user);
 
-      const data = products.map((product) =>
-        this.toProductListResponse(
+      const data = products.map((product) => {
+        const pricing = this.priceCalculator.calculatePrice(product, {
+          user,
+          channel: pricingChannel,
+        });
+        return toProductListResponse(
           product,
           mediaMap[product.id] ?? [],
-          user,
-          pricingChannel,
-        ),
-      );
+          pricing,
+        );
+      });
 
-      return {
+      const result: CatalogListResponseDto = {
         data,
         meta: {
           page,
@@ -268,6 +301,16 @@ export class CatalogService {
           totalPages: total === 0 ? 0 : Math.ceil(total / limit),
         },
       };
+
+      if (isPublicRequest && isSimpleList) {
+        const cacheKey = CacheService.catalogListKey(
+          query as unknown as Record<string, unknown>,
+          pricingChannel,
+        );
+        await this.cacheService.set(cacheKey, result, 60);
+      }
+
+      return result;
     } catch (error) {
       throw new InternalServerErrorException(
         error instanceof Error
@@ -277,11 +320,88 @@ export class CatalogService {
     }
   }
 
+  async findAllForTable(
+    query: QueryCatalogDto,
+    user?: User,
+    req?: Request,
+  ): Promise<CatalogListResponseDto> {
+    try {
+      const queryBuilder = this.productsRepository
+        .createQueryBuilder('product')
+        .leftJoinAndSelect('product.brand', 'brand')
+        .leftJoinAndSelect('product.categories', 'category')
+        .leftJoinAndSelect('product.tags', 'tag')
+        .leftJoinAndSelect('product.variants', 'variant')
+        .leftJoinAndSelect('variant.options', 'variantOption')
+        .leftJoinAndSelect('variant.inventory', 'inventory');
+
+      addCatalogHiddenSelects(queryBuilder);
+      applyFilters(queryBuilder, query);
+      applySorting(
+        queryBuilder,
+        query.sortBy ?? SortField.CREATED_AT,
+        query.sortOrder ?? SortOrder.DESC,
+      );
+
+      queryBuilder.distinct(true);
+
+      const products = await queryBuilder.getMany();
+      const total = products.length;
+      const productIds = products.map((product) => product.id);
+
+      const mediaMap =
+        productIds.length > 0
+          ? await this.mediaService.getProductMediaMap(productIds)
+          : {};
+
+      const pricingChannel = this.resolvePricingChannel(req, user);
+      const data = products.map((product) => {
+        const pricing = this.priceCalculator.calculatePrice(product, {
+          user,
+          channel: pricingChannel,
+        });
+        return toProductListResponse(
+          product,
+          mediaMap[product.id] ?? [],
+          pricing,
+        );
+      });
+
+      return {
+        data,
+        meta: {
+          page: 1,
+          limit: total || 1,
+          total,
+          totalPages: 1,
+        },
+      };
+    } catch (error) {
+      throw new InternalServerErrorException(
+        error instanceof Error
+          ? error.message
+          : 'Failed to fetch catalog table products',
+      );
+    }
+  }
+
   async findOneBySlug(
     slug: string,
     user?: User,
     req?: Request,
   ): Promise<ProductDetailResponseDto> {
+    const isPublicRequest =
+      !user &&
+      !req?.headers?.cookie?.includes('auth') &&
+      !req?.headers?.authorization;
+    const pricingChannel = this.resolvePricingChannel(req, user);
+    if (isPublicRequest) {
+      const cacheKey = CacheService.catalogDetailKey(slug, pricingChannel);
+      const cached =
+        await this.cacheService.get<ProductDetailResponseDto>(cacheKey);
+      if (cached) return cached;
+    }
+
     try {
       const queryBuilder = this.productsRepository
         .createQueryBuilder('product')
@@ -312,13 +432,23 @@ export class CatalogService {
         throw new NotFoundException('Product not found');
       }
 
-      const pricingChannel = isTorobAttributed(req)
-        ? PricingChannel.TOROB
-        : PricingChannel.PUBLIC;
+      const pricingChannel = this.resolvePricingChannel(req, user);
+      const pricing = this.priceCalculator.calculatePrice(product, {
+        user,
+        channel: pricingChannel,
+      });
 
       const media = await this.mediaService.getProductMedia(product.id);
 
-      return this.toProductDetailResponse(product, media, user, pricingChannel);
+      const result = toProductDetailResponse(product, media, pricing);
+
+      if (isPublicRequest) {
+        const cacheKey = CacheService.catalogDetailKey(slug, pricingChannel);
+        const dynamicTtl = DynamicTtlHelper.calculate(product);
+        await this.cacheService.set(cacheKey, result, dynamicTtl);
+      }
+
+      return result;
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
@@ -466,7 +596,16 @@ export class CatalogService {
     await this.productsRepository.save(product);
 
     const media = await this.mediaService.getProductMedia(product.id);
-    return this.toProductDetailResponse(product, media, undefined);
+    const pricing = this.priceCalculator.calculatePrice(product, {
+      user: undefined,
+      channel: PricingChannel.PUBLIC,
+    });
+
+    await this.catalogInvalidationService
+      .invalidateProductCache(product.slug)
+      .catch(() => {});
+
+    return toProductDetailResponse(product, media, pricing);
   }
 
   async getTorobFeed(
@@ -484,8 +623,8 @@ export class CatalogService {
       .leftJoinAndSelect('variants.options', 'variantOptions')
       .leftJoinAndSelect('variants.inventory', 'variantInventory');
 
-    this.addCatalogHiddenSelects(queryBuilder);
-    this.addPricingSelects(queryBuilder);
+    addCatalogHiddenSelects(queryBuilder);
+    addPricingSelects(queryBuilder);
 
     queryBuilder
       .andWhere('product.isActive = :isActive', { isActive: true })
@@ -511,245 +650,20 @@ export class CatalogService {
       total,
       max_pages: Math.ceil(total / limit),
       products: products.map((product) =>
-        mapProductToTorobDto(product, mediaMap[product.id] ?? [], frontendBaseUrl),
+        mapProductToTorobDto(
+          product,
+          mediaMap[product.id] ?? [],
+          frontendBaseUrl,
+        ),
       ),
     };
-  }
-
-  private applyFilters(
-    queryBuilder: SelectQueryBuilder<Product>,
-    query: QueryCatalogDto,
-  ): void {
-    if (query.search) {
-      queryBuilder.andWhere(
-        `(
-          product.name ILIKE :search
-          OR product.description ILIKE :search
-          OR category.name ILIKE :search
-          OR category.slug ILIKE :search
-          OR tag.name ILIKE :search
-          OR tag.slug ILIKE :search
-        )`,
-        { search: `%${query.search}%` },
-      );
-    }
-
-    if (query.categorySlugs?.length) {
-      queryBuilder.andWhere('category.slug IN (:...categorySlugs)', {
-        categorySlugs: query.categorySlugs,
-      });
-    }
-
-    if (query.brandSlugs?.length) {
-      queryBuilder.andWhere('brand.slug IN (:...brandSlugs)', {
-        brandSlugs: query.brandSlugs,
-      });
-    }
-
-    if (query.tagSlugs?.length) {
-      queryBuilder.andWhere('tag.slug IN (:...tagSlugs)', {
-        tagSlugs: query.tagSlugs,
-      });
-    }
-
-    if (query.isFeatured !== undefined) {
-      queryBuilder.andWhere('product.isFeatured = :isFeatured', {
-        isFeatured: query.isFeatured,
-      });
-    }
-
-    if (query.minPrice !== undefined) {
-      queryBuilder.andWhere('product.basePrice >= :minPrice', {
-        minPrice: query.minPrice,
-      });
-    }
-
-    if (query.maxPrice !== undefined) {
-      queryBuilder.andWhere('product.basePrice <= :maxPrice', {
-        maxPrice: query.maxPrice,
-      });
-    }
-  }
-
-  private applySorting(
-    queryBuilder: SelectQueryBuilder<Product>,
-    sortBy: SortField,
-    sortOrder: SortOrder,
-  ): void {
-    const direction = sortOrder.toUpperCase() as 'ASC' | 'DESC';
-
-    switch (sortBy) {
-      case SortField.PRICE:
-        queryBuilder.orderBy('product.basePrice', direction);
-        break;
-      case SortField.NAME:
-        queryBuilder.orderBy('product.name', direction);
-        break;
-      case SortField.CREATED_AT:
-      default:
-        queryBuilder.orderBy('product.createdAt', direction);
-        break;
-    }
-  }
-
-  private toProductListResponse(
-    product: Product,
-    media: Media[],
-    user?: User,
-    pricingChannel: PricingChannel = PricingChannel.PUBLIC,
-  ): ProductListResponseDto {
-    const thumbnail = this.pickThumbnail(media);
-
-    return {
-      id: product.id,
-      sku: product.sku,
-      name: product.name,
-      title: product.name,
-      slug: product.slug,
-      description: product.description ?? undefined,
-      shortDescription: product.shortDescription ?? undefined,
-      stockQuantity: product.stockQuantity,
-      isActive: product.isActive,
-      isFeatured: product.isFeatured,
-      brand: product.brand
-        ? {
-            id: product.brand.id,
-            name: product.brand.name,
-            slug: product.brand.slug,
-            logo: product.brand.logoUrl ?? undefined,
-          }
-        : undefined,
-      categories:
-        product.categories?.map((category) => ({
-          id: category.id,
-          name: category.name,
-          slug: category.slug,
-        })) ?? [],
-      tags:
-        product.tags?.map((tag) => ({
-          id: tag.id,
-          name: tag.name,
-          slug: tag.slug,
-          color: 'color' in tag ? (tag.color as string | undefined) : undefined,
-        })) ?? [],
-      rating: 0,
-      reviewsCount: 0,
-      thumbnail: thumbnail ? this.toMediaItemDto(thumbnail) : null,
-      pricing: this.priceCalculator.calculatePrice(product, {
-        user,
-        channel: pricingChannel,
-      }),
-      createdAt: product.createdAt,
-      updatedAt: product.updatedAt,
-    };
-  }
-
-  private toProductDetailResponse(
-    product: Product,
-    media: Media[],
-    user?: User,
-    pricingChannel: PricingChannel = PricingChannel.PUBLIC,
-  ): ProductDetailResponseDto {
-    const sortedMedia = this.sortMedia(media);
-    const thumbnail = this.pickThumbnail(sortedMedia);
-
-    return {
-      id: product.id,
-      sku: product.sku,
-      name: product.name,
-      title: product.name,
-      slug: product.slug,
-      description: product.description ?? undefined,
-      shortDescription: product.shortDescription ?? undefined,
-      stockQuantity: product.stockQuantity,
-      isActive: product.isActive,
-      isFeatured: product.isFeatured,
-      brand: product.brand
-        ? {
-            id: product.brand.id,
-            name: product.brand.name,
-            slug: product.brand.slug,
-            logo: product.brand.logoUrl ?? undefined,
-          }
-        : undefined,
-      categories:
-        product.categories?.map((category) => ({
-          id: category.id,
-          name: category.name,
-          slug: category.slug,
-        })) ?? [],
-      tags:
-        product.tags?.map((tag) => ({
-          id: tag.id,
-          name: tag.name,
-          slug: tag.slug,
-          color: 'color' in tag ? (tag.color as string | undefined) : undefined,
-        })) ?? [],
-      pricing: this.priceCalculator.calculatePrice(product, {
-        user,
-        channel: pricingChannel,
-      }),
-      media: {
-        thumbnail: thumbnail ? this.toMediaItemDto(thumbnail) : null,
-        gallery: sortedMedia.map((item) => this.toMediaItemDto(item)),
-      },
-      attributes:
-        product.attributes?.map((attribute) => ({
-          key: attribute.key,
-          value: attribute.value,
-        })) ?? [],
-      options:
-        product.options?.map((option) => ({
-          id: option.id,
-          optionName: option.option_name,
-          priceModifier: Number(option.price_modifier ?? 0),
-        })) ?? [],
-      variants:
-        product.variants?.map((variant) => ({
-          id: variant.id,
-          sku: variant.sku,
-          price: Number(variant.price ?? 0),
-          comparePrice:
-            variant.comparePrice === null || variant.comparePrice === undefined
-              ? null
-              : Number(variant.comparePrice),
-          options:
-            variant.options?.map((option) => ({
-              name: option.name,
-              value: option.value,
-            })) ?? [],
-          inventory: variant.inventory
-            ? {
-                stock: variant.inventory.stock,
-              }
-            : undefined,
-        })) ?? [],
-      rating: 0,
-      reviewsCount: 0,
-      createdAt: product.createdAt,
-      updatedAt: product.updatedAt,
-    };
-  }
-
-  private sortMedia(media: Media[]): Media[] {
-    return [...media].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  }
-
-  private pickThumbnail(media: Media[]): Media | null {
-    if (!media.length) {
-      return null;
-    }
-
-    const sorted = this.sortMedia(media);
-    return sorted[0] ?? null;
   }
 
   public async getProductThumbnailUrl(
     productId: string,
   ): Promise<string | null> {
     const media = await this.mediaService.getProductMedia(productId);
-
-    return this.pickThumbnail(media)?.url ?? null;
+    return pickThumbnail(media)?.url ?? null;
   }
 
   public getProductUnitPriceForChannel(
@@ -774,50 +688,15 @@ export class CatalogService {
     });
   }
 
-  private toMediaItemDto(mediaItem: Media): ProductMediaItemDto {
-    return {
-      id: mediaItem.id,
-      url: mediaItem.url,
-      thumbnailUrl: mediaItem.thumbnailUrl ?? undefined,
-      type: mediaItem.type,
-      alt: mediaItem.alt ?? undefined,
-      caption: mediaItem.caption ?? undefined,
-      order: mediaItem.order ?? undefined,
-    };
-  }
+  private resolvePricingChannel(req?: Request, user?: User): PricingChannel {
+    if (isTorobAttributed(req)) {
+      return PricingChannel.TOROB;
+    }
 
-  private addPricingSelects(
-    queryBuilder: SelectQueryBuilder<Product>,
-  ): SelectQueryBuilder<Product> {
-    return queryBuilder.addSelect([
-      'product.basePrice',
-      'product.salePrice',
-      'product.partnerDiscountPercent',
-      'product.isOnSale',
-      'product.saleStartDate',
-      'product.saleEndDate',
-    ]);
-  }
+    if (user?.role === Role.PARTNER) {
+      return PricingChannel.PARTNER;
+    }
 
-  private addCatalogHiddenSelects(
-    queryBuilder: SelectQueryBuilder<Product>,
-  ): SelectQueryBuilder<Product> {
-    return queryBuilder.addSelect([
-      'product.stockQuantity',
-      'product.trackInventory',
-      'product.lowStockThreshold',
-      'product.metaTitle',
-      'product.metaDescription',
-      'product.metaKeywords',
-      'product.isActive',
-      'product.isFeatured',
-      'product.shortDescription',
-      'product.basePrice',
-      'product.salePrice',
-      'product.isOnSale',
-      'product.saleStartDate',
-      'product.saleEndDate',
-      'product.partnerDiscountPercent',
-    ]);
+    return PricingChannel.PUBLIC;
   }
 }

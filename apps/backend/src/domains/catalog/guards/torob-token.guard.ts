@@ -73,9 +73,8 @@ export class TorobTokenGuard implements CanActivate {
 
   private parsePayload(encodedPayload: string): TorobJwtPayload {
     try {
-      const payloadJson = this.base64UrlToBuffer(encodedPayload).toString(
-        'utf-8',
-      );
+      const payloadJson =
+        this.base64UrlToBuffer(encodedPayload).toString('utf-8');
       return JSON.parse(payloadJson) as TorobJwtPayload;
     } catch {
       throw new UnauthorizedException('Invalid Torob token payload');

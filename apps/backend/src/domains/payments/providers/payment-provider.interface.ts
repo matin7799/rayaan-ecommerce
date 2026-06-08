@@ -1,71 +1,56 @@
-// ──────────────────────────────────────────────────────
-// اینترفیس مشترک درگاه‌های پرداخت (Strategy Pattern)
-// هر درگاه جدید (zarinpal, idpay, ...) باید این اینترفیس را پیاده‌سازی کند
-// مزیت: افزودن درگاه جدید بدون تغییر در service اصلی
-// ──────────────────────────────────────────────────────
+export interface PaymentRequestInput {
+  amount: number; // amount in IRR
+  callbackUrl: string;
+  description: string;
+  mobile?: string;
+  email?: string;
+  cardPan?: string | string[];
+  referrerId?: string;
+  currency?: 'IRR' | 'IRT';
+  orderId?: string;
+  wages?: Array<{
+    iban: string;
+    amount: number;
+    description?: string;
+  }>;
+}
 
-/**
- * نتیجه درخواست پرداخت به درگاه
- */
 export interface PaymentRequestResult {
-  /** شناسه رهگیری درگاه (authority / id) */
-  trackId: string;
-
-  /** لینک پرداخت برای ریدایرکت کاربر */
+  authority: string;
   paymentUrl: string;
+  rawPayload?: Record<string, unknown>;
 }
 
-/**
- * نتیجه تأیید (verify) پرداخت از درگاه
- */
 export interface PaymentVerifyResult {
-  /** آیا پرداخت موفق بوده؟ */
   success: boolean;
-
-  /** شناسه مرجع نهایی (ref_id) — برای نمایش به کاربر */
   refId: string | null;
-
-  /** کل payload بازگشتی — برای ذخیره در callback_payload */
-  rawPayload: Record<string, any>;
+  authority: string;
+  cardPan?: string | null;
+  fee?: number | null;
+  alreadyVerified?: boolean;
+  rawPayload: Record<string, unknown>;
 }
 
-/**
- * اینترفیس اصلی درگاه پرداخت
- * هر provider باید این سه متد را پیاده‌سازی کند
- */
+export interface PaymentInquiryResult {
+  success: boolean;
+  status?: string;
+  code?: number;
+  rawPayload: Record<string, unknown>;
+}
+
 export interface IPaymentProvider {
-  /**
-   * نام درگاه — برای شناسایی و لاگ
-   */
   readonly providerName: string;
 
-  /**
-   * ارسال درخواست پرداخت به درگاه
-   * @param amount مبلغ به ریال
-   * @param callbackUrl آدرس بازگشت از درگاه
-   * @param description توضیحات پرداخت
-   * @returns لینک پرداخت + شناسه رهگیری
-   */
-  requestPayment(
-    amount: number,
-    callbackUrl: string,
-    description: string,
-  ): Promise<PaymentRequestResult>;
+  requestPayment(input: PaymentRequestInput): Promise<PaymentRequestResult>;
 
-  /**
-   * تأیید (verify) پرداخت پس از بازگشت از درگاه
-   * @param trackId شناسه رهگیری (authority / id)
-   * @param payload کل query/body بازگشتی از callback
-   * @returns نتیجه تأیید شامل success/refId/rawPayload
-   */
-  verifyPayment(
-    trackId: string,
-    amount: number, // ← اضافه شد
-    payload: Record<string, any>,
-  ): Promise<PaymentVerifyResult>;
+  verifyPayment(input: {
+    authority: string;
+    amount: number; // IRR
+    status?: string;
+    payload?: Record<string, unknown>;
+  }): Promise<PaymentVerifyResult>;
+
+  inquiryPayment(authority: string): Promise<PaymentInquiryResult>;
 }
-/**
- * توکن تزریق وابستگی برای لیست درگاه‌ها
- * در ماژول از این توکن برای inject کردن provider‌ها استفاده می‌کنیم
- */
-export const PAYMENT_PROVIDERS_TOKEN = 'PAYMENT_PROVIDERS';
+
+export const PAYMENT_PROVIDERS_TOKEN = 'PAYMENT_PROVIDERS_TOKEN';

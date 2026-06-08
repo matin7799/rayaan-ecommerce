@@ -21,6 +21,9 @@ export class OrderItemResponseDto {
   product_slug!: string;
 
   @Expose()
+  variant_sku!: string | null;
+
+  @Expose()
   option_name!: string | null;
 
   @Expose()

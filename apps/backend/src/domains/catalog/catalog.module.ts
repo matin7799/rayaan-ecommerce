@@ -30,6 +30,7 @@ import { ProductPricingService } from './services/product-pricing.service';
 import { TagsService } from './services/tags.service';
 import { CategoriesRepository } from './categories.repository';
 import { TorobTokenGuard } from './guards/torob-token.guard';
+import { CatalogInvalidationService } from './services/catalog-invalidation.service';
 
 @Module({
   imports: [
@@ -65,6 +66,7 @@ import { TorobTokenGuard } from './guards/torob-token.guard';
     ProductsRepository,
     CategoriesRepository,
     TorobTokenGuard,
+    CatalogInvalidationService,
   ],
   exports: [
     CatalogService,
@@ -72,6 +74,7 @@ import { TorobTokenGuard } from './guards/torob-token.guard';
     ProductPricingService,
     ProductsRepository,
     TagsService,
+    CatalogInvalidationService,
   ],
 })
 export class CatalogModule {}

@@ -126,9 +126,6 @@ export function AdvancedSearch() {
               <X className="w-4 h-4 text-gray-500" />
             </button>
           )}
-          <span className="hidden lg:flex bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-[10px] font-mono text-gray-500 px-2 py-1 rounded-lg">
-            Ctrl K
-          </span>
         </div>
       </div>
 

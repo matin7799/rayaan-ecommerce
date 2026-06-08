@@ -9,10 +9,12 @@ const yekanBakh = localFont({
   src: '../../public/fonts/YekanBakh-VF.woff2',
   variable: '--font-yekan',
   display: 'swap',
+  preload: true,
+  fallback: ['system-ui', 'sans-serif'],
 });
 
 export const metadata: Metadata = {
-  title: 'فروشگاه اینترنتی | پلتفرم مدرن',
+  title: 'رایان تک | مرکز لپ تاپ، موبایل، کنسول و....',
   description: 'تجربه خریدی نوین با پلتفرم تجارت الکترونیک ما',
 };
 

@@ -73,7 +73,7 @@ function SpecItem({ name, value }: { name: string; value: string }) {
       <span className="text-sm font-medium text-muted-foreground transition-colors group-hover:text-foreground md:text-base">
         {name}
       </span>
-      <span className="font-mono text-sm font-semibold tracking-wide dir-ltr md:text-base">
+      <span className=" text-sm font-semibold tracking-wide dir-ltr md:text-base">
         {value}
       </span>
     </div>

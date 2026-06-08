@@ -1,33 +1,31 @@
 'use client';
 
-import { Fragment, useMemo, useState } from 'react';
-import Image from 'next/image';
+import { JSX, useMemo, useState } from 'react';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+  ChevronDown,
+  ChevronLeft,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useCategories } from '@/hooks/useCategories';
+import { useBrands } from '@/hooks/useBrands';
 import { useCatalogTableQuery } from '@/hooks/catalog/useCatalogTableQuery';
 import { useAuthStore } from '@/lib/store/auth-store';
-import { formatPersianPrice, formatPriceInput, parsePriceInput } from '@/lib/utils/price';
+import { formatPriceInput, parsePriceInput } from '@/lib/utils/price';
 import { ProductQuickView } from '@/components/products/ProductQuickView';
 import type { ProductCardItem } from '@/types/catalog.types';
 import { apiClient } from '@/services/api-client';
+import { CatalogTableListingDesktop } from './CatalogTableListingDesktop';
+import { CatalogTableListingMobile } from './CatalogTableListingMobile';
 
 const PLACEHOLDER_IMAGE = 'https://ranew.s3.ir-thr-at1.arvanstorage.ir/placeholder.png';
+
+type SortDirection = 'asc' | 'desc';
 
 export function CatalogTableListingClient() {
   const { user } = useAuthStore();
@@ -41,36 +39,39 @@ export function CatalogTableListingClient() {
     isError,
     state,
     setState,
-    setManyState,
     resetFilters,
-    enableSubcategoryFilter,
   } = useCatalogTableQuery();
   const { data: categories = [] } = useCategories();
+  const { data: brands = [] } = useBrands();
 
   const [quickViewProduct, setQuickViewProduct] = useState<ProductCardItem | null>(null);
   const [isQuickViewOpen, setIsQuickViewOpen] = useState(false);
   const [loadingQuickViewId, setLoadingQuickViewId] = useState<string | null>(null);
+  const [categorySearch, setCategorySearch] = useState('');
+  const [brandSearch, setBrandSearch] = useState('');
+  const [priceSort, setPriceSort] = useState<SortDirection>('asc');
 
-  const mainCategories = useMemo(
-    () => categories.filter((category) => !category.parentId),
-    [categories],
-  );
-
-  const subcategories = useMemo(() => {
-    if (!state.category) return [];
-    const selectedMain = categories.find((category) => category.slug === state.category);
-    if (!selectedMain) return [];
-    return categories.filter((category) => category.parentId === selectedMain.id);
-  }, [categories, state.category]);
+  const [expandedCategorySlugs, setExpandedCategorySlugs] = useState<Set<string>>(new Set());
 
   const filteredRows = useMemo(() => {
     if (!data) return [];
 
-    return data.rawItems
+    const rows = data.rawItems
       .filter((item) => {
         const categorySlugs = (item.categories ?? []).map((category) => category.slug);
-        if (state.category && !categorySlugs.includes(state.category)) return false;
-        if (state.subcategory && !categorySlugs.includes(state.subcategory)) return false;
+        if (
+          state.categorySlugs.length > 0 &&
+          !state.categorySlugs.some((slug) => categorySlugs.includes(slug))
+        ) {
+          return false;
+        }
+
+        if (
+          state.brandSlugs.length > 0 &&
+          !state.brandSlugs.includes(item.brand?.slug ?? '')
+        ) {
+          return false;
+        }
 
         const visiblePrice = item.pricing.finalPrice ?? item.pricing.basePrice;
         if (state.minPrice && visiblePrice < state.minPrice) return false;
@@ -79,22 +80,166 @@ export function CatalogTableListingClient() {
       })
       .map((item) => data.rows.find((row) => row.id === item.id))
       .filter((row): row is NonNullable<typeof row> => Boolean(row));
-  }, [data, state.category, state.subcategory, state.minPrice, state.maxPrice]);
+
+    return rows;
+  }, [data, state.categorySlugs, state.brandSlugs, state.minPrice, state.maxPrice]);
+
+  const flatCategories = useMemo(() => {
+    type TreeCategory = (typeof categories)[number] & {
+      children?: TreeCategory[];
+    };
+
+    const result: TreeCategory[] = [];
+    const seen = new Set<string>();
+
+    const walk = (nodes: TreeCategory[]) => {
+      nodes.forEach((node) => {
+        if (!node?.id || seen.has(node.id)) return;
+        seen.add(node.id);
+        result.push(node);
+        if (Array.isArray(node.children) && node.children.length > 0) {
+          walk(node.children);
+        }
+      });
+    };
+
+    walk(categories as TreeCategory[]);
+    return result;
+  }, [categories]);
+
+  const categoryBySlug = useMemo(
+    () => new Map(flatCategories.map((category) => [category.slug, category])),
+    [flatCategories],
+  );
 
   const groupedRows = useMemo(() => {
-    const groups = new Map<string, typeof filteredRows>();
-    filteredRows.forEach((row) => {
-      const key = `${row.mainCategory}__${row.subcategory ?? 'بدون زیردسته'}`;
-      const current = groups.get(key) ?? [];
+    if (!data) return [];
+
+    const rowById = new Map(filteredRows.map((row) => [row.id, row]));
+    const mainGroups = new Map<string, Map<string, typeof filteredRows>>();
+
+    data.rawItems.forEach((item) => {
+      const row = rowById.get(item.id);
+      if (!row) return;
+
+      const matchedCategories = (item.categories ?? [])
+        .map((category) => categoryBySlug.get(category.slug))
+        .filter(Boolean);
+      const matchedCategory =
+        matchedCategories.find((category) => Boolean(category?.parentId)) ??
+        matchedCategories[0];
+
+      const resolvedMain = matchedCategory?.parentId
+        ? flatCategories.find((category) => category.id === matchedCategory.parentId)?.name ??
+          row.mainCategory
+        : matchedCategory?.name ?? row.mainCategory;
+
+      const resolvedSub =
+        matchedCategory?.parentId
+          ? matchedCategory.name
+          : row.subcategory ?? 'بدون زیردسته';
+
+      const subGroups = mainGroups.get(resolvedMain) ?? new Map<string, typeof filteredRows>();
+      const current = subGroups.get(resolvedSub) ?? [];
       current.push(row);
-      groups.set(key, current);
+      subGroups.set(resolvedSub, current);
+      mainGroups.set(resolvedMain, subGroups);
     });
 
-    return Array.from(groups.entries()).map(([key, rows]) => {
-      const [mainCategory, subcategory] = key.split('__');
-      return { key, mainCategory, subcategory, rows };
+    return Array.from(mainGroups.entries()).map(([mainCategory, subGroups]) => ({
+      mainCategory,
+      subgroups: Array.from(subGroups.entries()).map(([subcategory, rows]) => {
+        const sortedRows = [...rows].sort((left, right) => {
+          const leftPrice = left.finalPrice ?? left.basePrice;
+          const rightPrice = right.finalPrice ?? right.basePrice;
+          return priceSort === 'asc' ? leftPrice - rightPrice : rightPrice - leftPrice;
+        });
+
+        return {
+          key: `${mainCategory}__${subcategory}`,
+          subcategory,
+          rows: sortedRows,
+        };
+      }),
+    }));
+  }, [data, filteredRows, flatCategories, categoryBySlug, priceSort]);
+
+  const toggleCategory = (slug: string) => {
+    const next = state.categorySlugs.includes(slug)
+      ? state.categorySlugs.filter((item) => item !== slug)
+      : [...state.categorySlugs, slug];
+    setState('categorySlugs', next);
+  };
+
+  const toggleBrand = (slug: string) => {
+    const next = state.brandSlugs.includes(slug)
+      ? state.brandSlugs.filter((item) => item !== slug)
+      : [...state.brandSlugs, slug];
+    setState('brandSlugs', next);
+  };
+
+  const toggleExpandCategory = (slug: string) => {
+    setExpandedCategorySlugs((prev) => {
+      const next = new Set(prev);
+      if (next.has(slug)) next.delete(slug);
+      else next.add(slug);
+      return next;
     });
-  }, [filteredRows]);
+  };
+
+  const togglePriceSort = () => {
+    setPriceSort((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+  };
+
+  const renderPriceSortIcon = () => {
+    if (priceSort === 'asc') return <ArrowUp className="size-4" />;
+    if (priceSort === 'desc') return <ArrowDown className="size-4" />;
+    return <ArrowUpDown className="size-4" />;
+  };
+
+  const renderCategoryNodes = (parentId: string | null = null, level = 0): JSX.Element[] => {
+    const normalizedSearch = categorySearch.trim().toLowerCase();
+    const nodes = flatCategories.filter((cat) => (cat.parentId ?? null) === parentId);
+    return nodes.map((node) => {
+      const children = flatCategories.filter((cat) => cat.parentId === node.id);
+      const isExpanded = expandedCategorySlugs.has(node.slug);
+      const isSelected = state.categorySlugs.includes(node.slug);
+      const matchesSelf = node.name.toLowerCase().includes(normalizedSearch);
+      const matchesChild =
+        normalizedSearch.length > 0 &&
+        flatCategories.some(
+          (cat) =>
+            cat.parentId === node.id && cat.name.toLowerCase().includes(normalizedSearch),
+        );
+
+      if (normalizedSearch && !matchesSelf && !matchesChild) {
+        return null;
+      }
+
+      return (
+        <div key={node.id} className="mb-1 rounded-md border p-2">
+          <div className="flex items-center justify-between gap-2" style={{ paddingRight: `${level * 14}px` }}>
+            <button
+              type="button"
+              className="flex items-center gap-2 text-sm"
+              onClick={() => children.length > 0 && toggleExpandCategory(node.slug)}
+            >
+              {children.length ? (
+                isExpanded ? <ChevronDown className="size-4" /> : <ChevronLeft className="size-4" />
+              ) : (
+                <span className="inline-block w-4" />
+              )}
+              <span>{node.name}</span>
+            </button>
+            <Checkbox checked={isSelected} onCheckedChange={() => toggleCategory(node.slug)} />
+          </div>
+          {children.length > 0 && (isExpanded || normalizedSearch.length > 0) ? (
+            <div className="mt-2">{renderCategoryNodes(node.id, level + 1)}</div>
+          ) : null}
+        </div>
+      );
+    }).filter(Boolean) as JSX.Element[];
+  };
 
   const openQuickView = async (productId: string) => {
     const item = data?.rawItems.find((product) => product.id === productId);
@@ -152,58 +297,73 @@ export function CatalogTableListingClient() {
   };
 
   return (
-    <div className="container mx-auto space-y-4 px-3 py-6 sm:px-4">
-      <div className="space-y-3 rounded-2xl border bg-background p-3 sm:p-4">
-        <h1 className="text-lg font-bold sm:text-2xl">جدول محصولات</h1>
+    <div className="container mx-auto space-y-5 px-3 py-6 sm:px-4">
+      <div className="space-y-4 rounded-2xl border bg-gradient-to-b from-background to-muted/30 p-3 shadow-sm sm:p-4">
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="text-lg font-bold sm:text-2xl">جدول محصولات</h1>
+          <div className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
+            {filteredRows.length} کالا
+          </div>
+        </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Select
-            value={state.category ?? 'all'}
-            onValueChange={(value) => {
-              const normalizedValue =
-                !value || value === 'all' ? undefined : String(value);
-              setManyState({
-                category: normalizedValue,
-                subcategory: undefined,
-              });
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="دسته اصلی" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">همه دسته‌ها</SelectItem>
-              {mainCategories.map((category) => (
-                <SelectItem key={category.id} value={category.slug}>
-                  {category.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Popover>
+            <PopoverTrigger className="inline-flex h-9 w-full items-center justify-between rounded-lg border border-input bg-background px-3 text-sm shadow-xs transition-[color,box-shadow] outline-none hover:bg-accent hover:text-accent-foreground">
+              <span className="truncate">
+                {state.categorySlugs.length > 0
+                  ? `${state.categorySlugs.length} دسته انتخاب شده`
+                  : 'انتخاب دسته‌بندی'}
+              </span>
+              <ChevronDown className="size-4 opacity-60" />
+            </PopoverTrigger>
+            <PopoverContent className="bg-gray-50/20 max-h-80 w-[320px] overflow-auto p-2 backdrop-blur-xl dark:bg-gray-200/20" align="start">
+              <div className="mb-2">
+                <Input
+                  value={categorySearch}
+                  onChange={(event) => setCategorySearch(event.target.value)}
+                  placeholder="جستجوی دسته‌بندی..."
+                  className="h-8"
+                />
+              </div>
+              {renderCategoryNodes(null, 0)}
+            </PopoverContent>
+          </Popover>
 
-          {enableSubcategoryFilter ? (
-            <Select
-              value={state.subcategory ?? 'all'}
-              onValueChange={(value) => {
-                const normalizedValue =
-                  !value || value === 'all' ? undefined : String(value);
-                setState('subcategory', normalizedValue);
-              }}
-              disabled={!state.category}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="زیردسته" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">همه زیردسته‌ها</SelectItem>
-                {subcategories.map((category) => (
-                  <SelectItem key={category.id} value={category.slug}>
-                    {category.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : null}
+          <Popover>
+            <PopoverTrigger className="inline-flex h-9 w-full items-center justify-between rounded-lg border border-input bg-background px-3 text-sm shadow-xs transition-[color,box-shadow] outline-none hover:bg-accent hover:text-accent-foreground">
+              <span className="truncate">
+                {state.brandSlugs.length > 0
+                  ? `${state.brandSlugs.length} برند انتخاب شده`
+                  : 'انتخاب برند'}
+              </span>
+              <ChevronDown className="size-4 opacity-60" />
+            </PopoverTrigger>
+            <PopoverContent className="max-h-80 w-[280px] overflow-auto bg-gray-50/20 p-2 backdrop-blur-xl dark:bg-gray-200/20" align="start">
+              <div className="mb-2">
+                <Input
+                  value={brandSearch}
+                  onChange={(event) => setBrandSearch(event.target.value)}
+                  placeholder="جستجوی برند..."
+                  className="h-8"
+                />
+              </div>
+              <div className="space-y-1">
+                {brands
+                  .filter((brand) =>
+                    brand.name.toLowerCase().includes(brandSearch.trim().toLowerCase()),
+                  )
+                  .map((brand) => (
+                    <label key={brand.id} className="flex items-center justify-between gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted/50">
+                      <span>{brand.name}</span>
+                      <Checkbox
+                        checked={state.brandSlugs.includes(brand.slug)}
+                        onCheckedChange={() => toggleBrand(brand.slug)}
+                      />
+                    </label>
+                  ))}
+              </div>
+            </PopoverContent>
+          </Popover>
 
           <Input
             inputMode="numeric"
@@ -235,94 +395,23 @@ export function CatalogTableListingClient() {
 
       {!isLoading && !isError && data ? (
         <>
-          <div className="hidden rounded-2xl border bg-background p-2 md:block">
-            <Table dir='rtl'>
-              <TableHeader dir='rtl'>
-                <TableRow dir='rtl'>
-                  <TableHead>تصویر</TableHead>
-                  <TableHead>SKU</TableHead>
-                  <TableHead>نام</TableHead>
-                  <TableHead>قیمت</TableHead>
-                  {isPartner ? <TableHead>قیمت همکار</TableHead> : null}
-                  <TableHead>مشاهده</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {groupedRows.map((group) => (
-                  <Fragment key={group.key}>
-                    <TableRow>
-                      <TableCell colSpan={isPartner ? 6 : 5} className="bg-muted/40 font-semibold">
-                        {group.mainCategory} {'>'} {group.subcategory}
-                      </TableCell>
-                    </TableRow>
-                    {group.rows.map((row) => (
-                      <TableRow key={row.id}>
-                        <TableCell>
-                          <div className="relative size-12 overflow-hidden rounded-md bg-muted">
-                            <Image src={row.imageUrl} alt={row.imageAlt} fill sizes="48px" className="object-cover" />
-                          </div>
-                        </TableCell>
-                        <TableCell>{row.sku}</TableCell>
-                        <TableCell className="max-w-[280px] whitespace-normal break-words font-medium leading-6">
-                          {row.title}
-                        </TableCell>
-                        <TableCell>{formatPersianPrice(row.finalPrice ?? row.basePrice)} تومان</TableCell>
-                        {isPartner ? (
-                          <TableCell>
-                            {typeof row.collaboratorPrice === 'number'
-                              ? `${formatPersianPrice(row.collaboratorPrice)} تومان`
-                              : 'ناموجود'}
-                          </TableCell>
-                        ) : null}
-                        <TableCell>
-                          <Button size="sm" variant="outline" onClick={() => openQuickView(row.id)}>
-                            {loadingQuickViewId === row.id ? 'در حال بارگذاری...' : 'مشاهده'}
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </Fragment>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          <CatalogTableListingDesktop
+            groupedRows={groupedRows}
+            isPartner={isPartner}
+            togglePriceSort={togglePriceSort}
+            renderPriceSortIcon={renderPriceSortIcon}
+            loadingQuickViewId={loadingQuickViewId}
+            openQuickView={openQuickView}
+          />
 
-          <div className="space-y-4 md:hidden">
-            {groupedRows.map((group) => (
-              <div key={`${group.key}-mobile`} className="space-y-2">
-                <div className="rounded-xl bg-muted/40 px-3 py-2 text-sm font-semibold">
-                  {group.mainCategory} {'>'} {group.subcategory}
-                </div>
-                {group.rows.map((row) => (
-                  <div key={row.id} className="rounded-2xl border bg-background p-3">
-                    <div className="mb-3 flex items-center gap-3">
-                      <div className="relative size-14 overflow-hidden rounded-lg bg-muted">
-                        <Image src={row.imageUrl} alt={row.imageAlt} fill sizes="56px" className="object-cover" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold leading-6 break-words">{row.title}</p>
-                        <p className="text-xs text-muted-foreground">SKU: {row.sku}</p>
-                      </div>
-                    </div>
-                    <div className="space-y-1 text-sm">
-                      <p>قیمت: {formatPersianPrice(row.finalPrice ?? row.basePrice)} تومان</p>
-                      {isPartner ? (
-                        <p>
-                          قیمت همکار:{' '}
-                          {typeof row.collaboratorPrice === 'number'
-                            ? `${formatPersianPrice(row.collaboratorPrice)} تومان`
-                            : 'ناموجود'}
-                        </p>
-                      ) : null}
-                    </div>
-                    <Button className="mt-3 w-full" variant="outline" onClick={() => openQuickView(row.id)}>
-                      {loadingQuickViewId === row.id ? 'در حال بارگذاری...' : 'مشاهده'}
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
+          <CatalogTableListingMobile
+            groupedRows={groupedRows}
+            isPartner={isPartner}
+            togglePriceSort={togglePriceSort}
+            renderPriceSortIcon={renderPriceSortIcon}
+            loadingQuickViewId={loadingQuickViewId}
+            openQuickView={openQuickView}
+          />
         </>
       ) : null}
 

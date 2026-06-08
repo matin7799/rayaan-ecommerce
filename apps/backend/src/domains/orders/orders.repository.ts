@@ -46,6 +46,7 @@ export class OrdersRepository {
       product_id: string | null;
       product_title: string;
       product_slug: string;
+      variant_sku?: string | null;
       option_name: string | null;
       quantity: number;
       unit_price: number;
@@ -74,6 +75,7 @@ export class OrdersRepository {
           product_id: item.product_id,
           product_title: item.product_title,
           product_slug: item.product_slug,
+          variant_sku: item.variant_sku ?? null,
           option_name: item.option_name,
           quantity: item.quantity,
           unit_price: item.unit_price,
@@ -132,7 +134,7 @@ export class OrdersRepository {
 
     const [data, total] = await this.orderRepo.findAndCount({
       where,
-      relations: ['items'],
+      relations: ['items', 'user'],
       order: { created_at: 'DESC' },
       skip: (page - 1) * limit,
       take: limit,

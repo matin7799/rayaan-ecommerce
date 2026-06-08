@@ -26,6 +26,7 @@ import { UpdateProductDto } from '../dto/update-product.dto';
 import { Auth } from '../../../common/decorators/auth.decorator';
 import { Roles } from '../../../common/decorators/roles.decorator';
 import { Role } from '../../auth/enums/role.enum';
+import { OptionalAuth } from '../../../common/decorators/optional-auth.decorator';
 import {
   isTorobAttributed,
   refreshTorobAttribution,
@@ -38,6 +39,7 @@ export class CatalogController {
   constructor(private readonly catalogService: CatalogService) {}
 
   @Get('products')
+  @OptionalAuth()
   @ApiOperation({ summary: 'Get catalog products' })
   @ApiResponse({
     status: 200,
@@ -50,14 +52,39 @@ export class CatalogController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<CatalogListResponseDto> {
     refreshTorobAttribution(req, res);
+    const isPartner = (req.user as any)?.role === Role.PARTNER;
     res.setHeader(
       'X-Pricing-Channel',
-      isTorobAttributed(req) ? 'torob' : 'public',
+      isTorobAttributed(req) ? 'torob' : isPartner ? 'partner' : 'public',
     );
     return this.catalogService.findAll(query, req.user as any, req);
   }
 
+  @Get('products/table')
+  @OptionalAuth()
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  @ApiOperation({ summary: 'Get all catalog products for catalog table' })
+  @ApiResponse({
+    status: 200,
+    description: 'All products for catalog table retrieved successfully',
+    type: CatalogListResponseDto,
+  })
+  async getProductsForTable(
+    @Query() query: QueryCatalogDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<CatalogListResponseDto> {
+    refreshTorobAttribution(req, res);
+    const isPartner = (req.user as any)?.role === Role.PARTNER;
+    res.setHeader(
+      'X-Pricing-Channel',
+      isTorobAttributed(req) ? 'torob' : isPartner ? 'partner' : 'public',
+    );
+    return this.catalogService.findAllForTable(query, req.user as any, req);
+  }
+
   @Get('products/:slug')
+  @OptionalAuth()
   @ApiOperation({ summary: 'Get product details by slug' })
   @ApiParam({ name: 'slug', description: 'Product slug' })
   @ApiResponse({
@@ -71,9 +98,10 @@ export class CatalogController {
     @Res({ passthrough: true }) res: Response,
   ): Promise<ProductDetailResponseDto> {
     refreshTorobAttribution(req, res);
+    const isPartner = (req.user as any)?.role === Role.PARTNER;
     res.setHeader(
       'X-Pricing-Channel',
-      isTorobAttributed(req) ? 'torob' : 'public',
+      isTorobAttributed(req) ? 'torob' : isPartner ? 'partner' : 'public',
     );
     return this.catalogService.findOneBySlug(slug, req.user as any, req);
   }

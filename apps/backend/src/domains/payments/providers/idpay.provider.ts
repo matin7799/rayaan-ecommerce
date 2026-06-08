@@ -1,6 +1,8 @@
 import { Injectable, Logger, NotImplementedException } from '@nestjs/common';
 import {
   IPaymentProvider,
+  PaymentInquiryResult,
+  PaymentRequestInput,
   PaymentRequestResult,
   PaymentVerifyResult,
 } from './payment-provider.interface';
@@ -17,25 +19,31 @@ export class IdpayProvider implements IPaymentProvider {
 
   readonly providerName = 'idpay';
 
-  requestPayment(
-    _amount: number,
-    _callbackUrl: string,
-    _description: string,
-  ): Promise<PaymentRequestResult> {
+  requestPayment(_input: PaymentRequestInput): Promise<PaymentRequestResult> {
     this.logger.warn('درگاه آیدی‌پی هنوز پیاده‌سازی نشده');
     throw new NotImplementedException('IDPay provider is not implemented yet');
   }
 
-  verifyPayment(
-    _trackId: string,
-    _amount: number,
-    payload: Record<string, any>,
-  ): Promise<PaymentVerifyResult> {
+  verifyPayment(input: {
+    authority: string;
+    amount: number;
+    status?: string;
+    payload?: Record<string, unknown>;
+  }): Promise<PaymentVerifyResult> {
     // placeholder — فاز ۷ تکمیل می‌شود
     return Promise.resolve({
       success: false,
       refId: null,
-      rawPayload: payload,
+      authority: input.authority,
+      rawPayload: input.payload ?? {},
+    });
+  }
+
+  inquiryPayment(_authority: string): Promise<PaymentInquiryResult> {
+    this.logger.warn('استعلام آیدی‌پی هنوز پیاده‌سازی نشده');
+    return Promise.resolve({
+      success: false,
+      rawPayload: {},
     });
   }
 }

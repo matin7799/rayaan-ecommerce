@@ -47,6 +47,21 @@ export class SanitizeMiddleware implements NestMiddleware {
   }
 
   private sanitizeString(str: string): string {
-    return str.trim();
+    const trimmed = str.trim();
+    // Check if it contains HTML-like elements
+    if (/<[a-z][\s\S]*>/i.test(trimmed)) {
+      // Strips dangerous tags: <script>, <iframe>, <object>, <embed>, <applet>
+      // and inline events like onclick, onload, onerror, etc.
+      return trimmed
+        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+        .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, '')
+        .replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object>/gi, '')
+        .replace(/<embed\b[^<]*(?:(?!<\/embed>)<[^<]*)*<\/embed>/gi, '')
+        .replace(/<applet\b[^<]*(?:(?!<\/applet>)<[^<]*)*<\/applet>/gi, '')
+        .replace(/\s+on\w+\s*=\s*(["'][^"']*["']|[^\s>]+)/gi, '')
+        .replace(/javascript\s*:/gi, 'no-javascript:');
+    }
+    // Escape standard text characters to prevent XSS
+    return trimmed.replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 }

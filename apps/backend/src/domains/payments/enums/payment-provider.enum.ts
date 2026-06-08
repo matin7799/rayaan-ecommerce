@@ -5,4 +5,5 @@
 export enum PaymentProvider {
   ZARINPAL = 'zarinpal',
   IDPAY = 'idpay',
+  DIGIPAY = 'digipay',
 }

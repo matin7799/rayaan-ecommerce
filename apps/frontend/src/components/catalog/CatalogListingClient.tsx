@@ -104,7 +104,7 @@ export function CatalogListingClient({
               فیلترها
             </SheetTrigger>
 
-            <SheetContent side="right" className="flex w-full flex-col p-0 sm:w-[380px]">
+            <SheetContent side="right" className="bg-gray-50/20 dark:bg-gray-200/20 backdrop-blur-xl flex w-full flex-col p-0 sm:w-95">
               <SheetHeader className="border-b border-border p-4">
                 <SheetTitle className="text-right text-lg font-bold">
                   فیلتر محصولات
@@ -128,14 +128,14 @@ export function CatalogListingClient({
           </div>
         </aside>
 
-        <main className="min-w-0 flex-1">
+        <section className="min-w-0 flex-1">
           <div className="mb-6 hidden items-center justify-between border-b border-border pb-4 lg:flex">
             <h1 className="text-3xl font-bold">{resolvedTitle}</h1>
             <SortBar />
           </div>
 
           <CatalogProductGrid filters={resolvedFilters} />
-        </main>
+        </section>
       </div>
     </div>
   );

@@ -3,12 +3,8 @@
 import { Module, Global } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
-
-/**
- * ثابت برای تزریق وابستگی Redis
- * هرجا بخوایم Redis رو inject کنیم از این token استفاده می‌کنیم
- */
-export const REDIS_CLIENT = 'REDIS_CLIENT';
+import { CacheService } from './cache.service';
+import { REDIS_CLIENT } from './redis.constants';
 
 /**
  * ماژول سراسری Redis
@@ -26,6 +22,18 @@ export const REDIS_CLIENT = 'REDIS_CLIENT';
           port: configService.get<number>('REDIS_PORT', 6379),
           password: configService.get<string>('REDIS_PASSWORD', ''),
           db: configService.get<number>('REDIS_DB', 0),
+          // Enable lazy connect to avoid blocking app startup
+          lazyConnect: true,
+          retryStrategy: (times) => {
+            if (times > 3) {
+              console.warn(
+                '⚠️ Redis unavailable after 3 retries — running without cache',
+              );
+              return null; // stop retrying
+            }
+            return Math.min(times * 200, 2000);
+          },
+          maxRetriesPerRequest: 3,
         });
 
         redis.on('connect', () => {
@@ -33,14 +41,26 @@ export const REDIS_CLIENT = 'REDIS_CLIENT';
         });
 
         redis.on('error', (err) => {
-          console.error('❌ Redis connection error:', err);
+          console.warn(
+            '⚠️ Redis connection error (caching disabled):',
+            err.message,
+          );
+        });
+
+        // Attempt connection but don't block
+        redis.connect().catch((err) => {
+          console.warn(
+            '⚠️ Redis initial connection failed (caching disabled):',
+            err.message,
+          );
         });
 
         return redis;
       },
       inject: [ConfigService],
     },
+    CacheService,
   ],
-  exports: [REDIS_CLIENT],
+  exports: [REDIS_CLIENT, CacheService],
 })
 export class RedisModule {}

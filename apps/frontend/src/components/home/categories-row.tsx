@@ -54,15 +54,16 @@ export function CategoriesRow() {
           <Link 
             key={category.id}
             href={`products/category/${category.slug}`}
-            className="flex flex-col items-center gap-4 min-w-[110px] group cursor-pointer"
+            className="flex flex-col items-center gap-4 min-w-27.5 group cursor-pointer"
           >
             {/* Gradient Ring & Image Container */}
-            <div className="relative p-[3px] rounded-full bg-gradient-to-tr from-neutral-200 to-neutral-300 dark:from-neutral-700 dark:to-neutral-800 group-hover:from-primary group-hover:to-purple-500 transition-all duration-500 shadow-sm group-hover:shadow-primary/30 group-hover:shadow-xl">
-              <div className="relative w-24 h-24 md:w-28 md:h-28 rounded-full overflow-hidden border-[4px] border-white dark:border-neutral-950 bg-white">
+            <div className="relative p-0.75 rounded-full bg-linear-to-tr from-neutral-200 to-neutral-300 dark:from-neutral-700 dark:to-neutral-800 group-hover:from-primary group-hover:to-purple-500 transition-all duration-500 shadow-sm group-hover:shadow-primary/30 group-hover:shadow-xl">
+              <div className="relative w-24 h-24 md:w-28 md:h-28 rounded-full overflow-hidden border-4 border-white dark:border-neutral-950 bg-white">
                 <Image
                   src={`https://ranew.s3.ir-thr-at1.arvanstorage.ir/categories/${category.slug}.jpg`}
                   alt={category.name}
                   fill
+                  sizes="(min-width: 768px) 112px, 96px"
                   className="object-cover group-hover:scale-125 group-hover:rotate-3 transition-all duration-700 ease-out"
                 />
                 {/* Dark overlay for better hover effect */}

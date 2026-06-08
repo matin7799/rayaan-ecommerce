@@ -3,6 +3,13 @@ export { blogService } from './blog.service';
 export { userService } from './user.service';
 export { productService } from './product.service';
 export { fetchProductById, fetchProducts } from './catalog.service';
+export { digipayService } from './digipay.service';
+export type {
+  DigipayInstallmentPlan,
+  DigipayPlansResponse,
+  DigipayOperationResult,
+} from './digipay.service';
+
 
 export type {
   Category,

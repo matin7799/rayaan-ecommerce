@@ -46,6 +46,9 @@ export class OrderItem {
   @Column({ name: 'product_slug', type: 'varchar' })
   product_slug!: string;
 
+  @Column({ name: 'variant_sku', type: 'varchar', nullable: true })
+  variant_sku!: string | null;
+
   // نام آپشن انتخاب‌شده (مثلاً "رنگ قرمز")
   // nullable → اگه محصول بدون آپشن خریداری بشه
   @Column({ name: 'option_name', type: 'varchar', nullable: true })

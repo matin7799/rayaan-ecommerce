@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useMemo } from 'react';
 import { ArrowLeft, Sparkles, Flame, Zap } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
@@ -18,37 +19,59 @@ type SliderVariant = 'default' | 'premium' | 'flash' | 'minimal';
 
 interface ProductSliderProps {
   title: string;
+  mobileTitle?: string;
   subtitle?: string;
+  mobileSubtitle?: string;
   viewAllLink?: string;
   products?: ProductListItem[];
   variant?: SliderVariant;
   className?: string;
   isLoading?: boolean;
+  mobilePeek?: number;
 }
 
 // Map backend product to ProductCard format
 function mapProduct(product: ProductListItem) {
-  const PLACEHOLDER_IMAGE = 'https://ranew.s3.ir-thr-at1.arvanstorage.ir/placeholder.png';
+  const PLACEHOLDER_IMAGE =
+    'https://ranew.s3.ir-thr-at1.arvanstorage.ir/placeholder.png';
+
   const firstVariant = product.variants?.[0];
   const firstImage = product.images?.[0]?.url?.trim();
   const firstGallery = product.media?.gallery?.[0]?.url?.trim();
   const mediaThumbnail = product.media?.thumbnail?.url?.trim();
   const thumbnail = product.thumbnailUrl?.trim();
+
   const stock =
     firstVariant?.inventory?.stock ??
     firstVariant?.stock ??
     product.stockQuantity ??
     0;
-  const basePrice = product.pricing?.basePrice ?? firstVariant?.comparePrice ?? firstVariant?.price ?? 0;
-  const finalPrice = product.pricing?.finalPrice ?? firstVariant?.price ?? basePrice;
+
+  const basePrice =
+    product.pricing?.basePrice ??
+    firstVariant?.comparePrice ??
+    firstVariant?.price ??
+    0;
+
+  const finalPrice =
+    product.pricing?.finalPrice ??
+    firstVariant?.price ??
+    basePrice;
+
   const discountPrice = finalPrice < basePrice ? finalPrice : undefined;
-  
+  const inStock = stock > 0;
+
   return {
     id: product.id,
     slug: product.slug,
     title: product.title,
     brand: product.brand?.name || product.categories?.[0]?.name || '',
-    thumbnail: firstImage || mediaThumbnail || firstGallery || thumbnail || PLACEHOLDER_IMAGE,
+    thumbnail:
+      firstImage ||
+      mediaThumbnail ||
+      firstGallery ||
+      thumbnail ||
+      PLACEHOLDER_IMAGE,
     thumbnailAlt: product.title,
     price: basePrice,
     discountPrice,
@@ -58,35 +81,42 @@ function mapProduct(product: ProductListItem) {
     shortDescription: product.shortDescription || product.description || '',
     defaultVariantId: firstVariant?.id,
     hasMultipleVariants: (product.variants?.length || 0) > 1,
-    inStock: stock > 0,
+    inStock,
+    isUnavailable: !inStock,
     specs: [],
   };
 }
 
 export function ProductSlider({
   title,
+  mobileTitle,
   subtitle,
+  mobileSubtitle,
   viewAllLink,
   products,
   variant = 'default',
   className,
   isLoading = false,
+  mobilePeek = 1.5,
 }: ProductSliderProps) {
   const variantStyles = {
     default: {
-      container: 'bg-gradient-to-br from-zinc-50 to-white dark:from-zinc-900 dark:to-zinc-950',
+      container:
+        'bg-gradient-to-br from-zinc-50 to-white dark:from-zinc-900 dark:to-zinc-950',
       header: 'text-zinc-900 dark:text-zinc-100',
       icon: Sparkles,
       iconColor: 'text-primary',
     },
     premium: {
-      container: 'bg-gradient-to-br from-amber-50/50 to-white dark:from-zinc-900 dark:to-zinc-950',
+      container:
+        'bg-gradient-to-br from-amber-50/50 to-white dark:from-zinc-900 dark:to-zinc-950',
       header: 'text-amber-900 dark:text-amber-100',
       icon: Zap,
       iconColor: 'text-amber-500',
     },
     flash: {
-      container: 'bg-gradient-to-br from-rose-50/30 to-white dark:from-rose-950/20 dark:to-zinc-950',
+      container:
+        'bg-gradient-to-br from-rose-50/30 to-white dark:from-rose-950/20 dark:to-zinc-950',
       header: 'text-rose-900 dark:text-rose-100',
       icon: Flame,
       iconColor: 'text-rose-500',
@@ -102,46 +132,106 @@ export function ProductSlider({
   const style = variantStyles[variant];
   const Icon = style.icon;
 
+  const mobileBasis =
+    mobilePeek === 1.5
+      ? 'basis-[68%]'
+      : mobilePeek === 1.2
+        ? 'basis-[82%]'
+        : mobilePeek === 2
+          ? 'basis-1/2'
+          : 'basis-[68%]';
+
+  const hasResponsiveTitle = Boolean(mobileTitle && mobileTitle !== title);
+  const hasResponsiveSubtitle = Boolean(
+    mobileSubtitle && mobileSubtitle !== subtitle
+  );
+  const cardProducts = useMemo(
+    () =>
+      products
+        ?.map(mapProduct)
+        .sort(
+          (left, right) =>
+            Number(left.isUnavailable) - Number(right.isUnavailable)
+        ),
+    [products]
+  );
+
   return (
-    <section className={cn('relative py-8 px-4 md:px-8 rounded-3xl', style.container, className)}>
+    <section
+      className={cn(
+        'relative overflow-hidden rounded-2xl px-3 py-6 sm:rounded-3xl sm:px-4 sm:py-8 md:px-8',
+        style.container,
+        className
+      )}
+    >
       <div className="container mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <div className={cn('p-2 rounded-xl bg-white/80 dark:bg-zinc-800/80 shadow-sm', style.iconColor)}>
-              <Icon className="w-6 h-6" />
-            </div>
-            <div>
-              <h2 className={cn('text-2xl md:text-3xl font-bold', style.header)}>{title}</h2>
-              {subtitle && (
-                <p className="text-sm md:text-base text-zinc-600 dark:text-zinc-400 mt-1">{subtitle}</p>
+        <div className="mb-5 flex items-start justify-between gap-3 sm:mb-6 sm:items-center">
+          <div className="flex min-w-0 items-start gap-3 sm:items-center">
+            <div
+              className={cn(
+                'shrink-0 rounded-xl bg-white/80 p-2 shadow-sm dark:bg-zinc-800/80',
+                style.iconColor
               )}
+            >
+              <Icon className="h-5 w-5 sm:h-6 sm:w-6" />
+            </div>
+
+            <div className="min-w-0">
+              <h2
+                className={cn(
+                  'truncate text-lg font-bold sm:text-2xl md:text-3xl',
+                  style.header
+                )}
+              >
+                {hasResponsiveTitle ? (
+                  <>
+                    <span className="sm:hidden">{mobileTitle}</span>
+                    <span className="hidden sm:inline">{title}</span>
+                  </>
+                ) : (
+                  title
+                )}
+              </h2>
+
+              {subtitle ? (
+                <p className="mt-1 line-clamp-2 text-xs text-zinc-600 dark:text-zinc-400 sm:text-sm md:text-base">
+                  {hasResponsiveSubtitle ? (
+                    <>
+                      <span className="sm:hidden">{mobileSubtitle}</span>
+                      <span className="hidden sm:inline">{subtitle}</span>
+                    </>
+                  ) : (
+                    subtitle
+                  )}
+                </p>
+              ) : null}
             </div>
           </div>
 
-          {viewAllLink && !isLoading && (
+          {viewAllLink && !isLoading ? (
             <Link
               href={viewAllLink}
-              className="group flex items-center gap-2 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+              className="group flex shrink-0 items-center gap-1.5 text-xs font-medium text-primary transition-colors hover:text-primary/80 sm:text-sm"
             >
               <span>مشاهده همه</span>
-              <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+              <ArrowLeft className="h-4 w-4 transition-transform group-hover:-translate-x-1" />
             </Link>
-          )}
+          ) : null}
         </div>
 
         {/* Products Carousel */}
         {isLoading ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
             {Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="space-y-3">
-                <Skeleton className="h-48 w-full rounded-xl" />
+                <Skeleton className="h-40 w-full rounded-xl sm:h-48" />
                 <Skeleton className="h-4 w-3/4" />
                 <Skeleton className="h-4 w-1/2" />
               </div>
             ))}
           </div>
-        ) : products && products.length > 0 ? (
+        ) : cardProducts && cardProducts.length > 0 ? (
           <Carousel
             opts={{
               align: 'start',
@@ -151,18 +241,28 @@ export function ProductSlider({
             className="w-full"
           >
             <CarouselContent className="-ml-2 md:-ml-4">
-              {products.map((product) => (
-                <CarouselItem key={product.id} className="pl-2 md:pl-4 basis-1/2 md:basis-1/3 lg:basis-1/4 xl:basis-1/5">
-                  <ProductCard product={mapProduct(product)} variant={variant} />
+              {cardProducts.map((product) => (
+                <CarouselItem
+                  key={product.id}
+                  className={cn(
+                    'shrink-0 pl-2 md:pl-4',
+                    mobileBasis,
+                    'sm:basis-1/2 md:basis-1/3 lg:basis-1/4 xl:basis-1/5'
+                  )}
+                >
+                  <ProductCard product={product} variant={variant} />
                 </CarouselItem>
               ))}
             </CarouselContent>
+
             <CarouselPrevious className="hidden md:flex -right-4" />
             <CarouselNext className="hidden md:flex -left-4" />
           </Carousel>
         ) : (
-          <div className="text-center py-12">
-            <p className="text-zinc-500 dark:text-zinc-400">محصولی یافت نشد</p>
+          <div className="py-12 text-center">
+            <p className="text-zinc-500 dark:text-zinc-400">
+              محصولی یافت نشد
+            </p>
           </div>
         )}
       </div>

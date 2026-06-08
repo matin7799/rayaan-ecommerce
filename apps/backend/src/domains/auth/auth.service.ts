@@ -24,6 +24,9 @@ import { LoginDto } from './dto/login.dto';
 import { RequestOtpDto } from './dto/request-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { SmsService } from '../../providers/sms/sms.service';
+import { generateTokens, generateTempToken } from './auth-token.helper';
+import { generateOtpCode, checkOtpRateLimit } from './auth-otp.helper';
 
 @Injectable()
 export class AuthService {
@@ -33,20 +36,17 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     @Inject('REDIS_CLIENT') private readonly redis: Redis,
+    private readonly smsService: SmsService,
   ) {}
 
   // ==================== OTP ====================
 
-  /**
-   * درخواست ارسال OTP
-   * همیشه 200 برمی‌گرداند (جلوگیری از user enumeration)
-   */
   async requestOtp(dto: RequestOtpDto, clientIp: string): Promise<any> {
     const { phone } = dto;
 
-    await this.checkOtpRateLimit(phone, clientIp);
+    await checkOtpRateLimit(phone, clientIp, this.redis, this.configService);
 
-    const code = this.generateOtpCode();
+    const code = generateOtpCode();
     const otpKey = `otp:${phone}`;
     const attemptsKey = `otp:attempts:${phone}`;
     const otpTtl = this.configService.get<number>('redis.otpTtl') ?? 120;
@@ -54,8 +54,7 @@ export class AuthService {
     await this.redis.setex(otpKey, otpTtl, code);
     await this.redis.setex(attemptsKey, otpTtl, '0');
 
-    // در production از سرویس پیامکی استفاده شود
-    console.log(`[OTP] Code for ${phone}: ${code}`);
+    await this.smsService.sendOtp(phone, code);
 
     return {
       otpExpiry: otpTtl,
@@ -63,11 +62,6 @@ export class AuthService {
     };
   }
 
-  /**
-   * تأیید OTP
-   * کاربر موجود → توکن‌های ورود
-   * کاربر جدید → tempToken برای تکمیل ثبت‌نام
-   */
   async verifyOtp(dto: VerifyOtpDto): Promise<any> {
     const { phone, code } = dto;
 
@@ -82,7 +76,6 @@ export class AuthService {
       });
     }
 
-    // بررسی حد مجاز تلاش‌های ناموفق
     const attempts = parseInt((await this.redis.get(attemptsKey)) || '0', 10);
     const maxAttempts =
       this.configService.get<number>('redis.otpMaxVerifyAttempts') ?? 5;
@@ -106,27 +99,25 @@ export class AuthService {
       });
     }
 
-    // کد صحیح - حذف از Redis
     await this.redis.del(otpKey, attemptsKey);
 
     const user = await this.userRepository.findOne({ where: { phone } });
 
     if (user) {
-      // کاربر موجود → ورود مستقیم
-      const tokens = this.generateTokens(user);
+      const tokens = generateTokens(this.jwtService, this.configService, user);
       return { needsRegistration: false, ...tokens };
     } else {
-      // کاربر جدید → tempToken
-      const tempToken = this.generateTempToken(phone);
+      const tempToken = generateTempToken(
+        this.jwtService,
+        this.configService,
+        phone,
+      );
       return { needsRegistration: true, tempToken };
     }
   }
 
   // ==================== Registration ====================
 
-  /**
-   * ثبت‌نام با tempToken (بعد از تأیید OTP)
-   */
   async registerWithTempToken(
     tempToken: string,
     dto: RegisterDto,
@@ -157,7 +148,6 @@ export class AuthService {
 
     const hashedPassword = await bcrypt.hash(dto.password, 10);
 
-    // ایجاد کاربر - firstName و lastName جدا
     const user = this.userRepository.create({
       phone,
       password: hashedPassword,
@@ -168,13 +158,10 @@ export class AuthService {
 
     await this.userRepository.save(user);
 
-    const tokens = this.generateTokens(user);
+    const tokens = generateTokens(this.jwtService, this.configService, user);
     return { userId: user.id, ...tokens };
   }
 
-  /**
-   * ثبت‌نام مستقیم (fallback بدون OTP)
-   */
   async register(dto: RegisterDto): Promise<any> {
     const { phone, password, firstName, lastName } = dto;
 
@@ -207,15 +194,12 @@ export class AuthService {
 
     await this.userRepository.save(user);
 
-    const tokens = this.generateTokens(user);
+    const tokens = generateTokens(this.jwtService, this.configService, user);
     return { userId: user.id, ...tokens };
   }
 
   // ==================== Login ====================
 
-  /**
-   * ورود با رمز عبور
-   */
   async login(dto: LoginDto): Promise<any> {
     const { phone, password } = dto;
 
@@ -235,14 +219,11 @@ export class AuthService {
       });
     }
 
-    return this.generateTokens(user);
+    return generateTokens(this.jwtService, this.configService, user);
   }
 
   // ==================== Refresh Token ====================
 
-  /**
-   * تمدید توکن با استفاده از refresh token
-   */
   async refreshToken(dto: RefreshTokenDto): Promise<any> {
     const { refreshToken } = dto;
 
@@ -262,9 +243,7 @@ export class AuthService {
         });
       }
 
-      // تولید توکن‌های جدید
-      const tokens = this.generateTokens(user);
-      return tokens;
+      return generateTokens(this.jwtService, this.configService, user);
     } catch {
       throw new UnauthorizedException({
         code: 'INVALID_REFRESH_TOKEN',
@@ -273,82 +252,7 @@ export class AuthService {
     }
   }
 
-  /**
-   * خروج از سیستم (اختیاری - برای revoke کردن refresh token)
-   */
   async logout(_userId: string): Promise<void> {
-    // در صورت نیاز می‌توان refresh token را در blacklist قرار داد
-    // یا از دیتابیس حذف کرد
-    // فعلاً placeholder است
-  }
-
-  // ==================== Tokens ====================
-
-  /**
-   * تولید accessToken + refreshToken
-   */
-  private generateTokens(user: User) {
-    const payload = { sub: user.id, phone: user.phone, role: user.role };
-
-    const accessToken = this.jwtService.sign(payload, {
-      secret: this.configService.get<string>('jwt.secret'),
-      expiresIn: 900, // 15 دقیقه
-    });
-
-    const refreshToken = this.jwtService.sign(payload, {
-      secret: this.configService.get<string>('jwt.refreshSecret'),
-      expiresIn: 604800, // 7 روز
-    });
-
-    return { accessToken, refreshToken };
-  }
-
-  /**
-   * تولید tempToken برای ثبت‌نام بعد از OTP
-   */
-  private generateTempToken(phone: string): string {
-    return this.jwtService.sign(
-      { phone, type: 'temp' },
-      {
-        secret: this.configService.get<string>('jwt.tempSecret'),
-        expiresIn: 600, // 10 دقیقه
-      },
-    );
-  }
-
-  // ==================== Helpers ====================
-
-  private generateOtpCode(): string {
-    return Math.floor(100000 + Math.random() * 900000).toString();
-  }
-
-  private async checkOtpRateLimit(
-    phone: string,
-    clientIp: string,
-  ): Promise<void> {
-    const rateLimitKey = `otp:ratelimit:${phone}:${clientIp}`;
-    const count = await this.redis.incr(rateLimitKey);
-
-    if (count === 1) {
-      const windowSeconds =
-        this.configService.get<number>('redis.otpRateLimit.windowSeconds') ??
-        600;
-      await this.redis.expire(rateLimitKey, windowSeconds);
-    }
-
-    const maxAttempts =
-      this.configService.get<number>('redis.otpRateLimit.maxAttempts') ?? 3;
-
-    if (count > maxAttempts) {
-      const ttl = await this.redis.ttl(rateLimitKey);
-      throw new HttpException(
-        {
-          code: 'OTP_RATE_LIMITED',
-          message: 'Too many OTP requests. Please try again later.',
-          retryAfter: ttl,
-        },
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
-    }
+    // Placeholder
   }
 }

@@ -1,69 +1,70 @@
-// backend/src/providers/sms/sms.service.ts
+// apps/backend/src/providers/sms/sms.service.ts
 
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { SmsProvider } from './interfaces/sms-provider.interface';
+import { MeliPayamakProvider } from './providers/melipayamak.provider';
+import { SmsIrProvider } from './providers/sms-ir.provider';
+
+type SmsProviderName = 'melipayamak' | 'smsir';
 
 @Injectable()
 export class SmsService {
   private readonly logger = new Logger(SmsService.name);
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly melipayamakProvider: MeliPayamakProvider,
+    private readonly smsIrProvider: SmsIrProvider,
+  ) {}
 
-  /**
-   * ارسال پیامک OTP از طریق ملی‌پیامک
-   * در محیط development کد رو فقط لاگ می‌کنیم
-   */
   async sendOtp(phone: string, code: string): Promise<void> {
-    const isDev = this.configService.get('NODE_ENV') === 'development';
+    const providerName = this.getActiveProviderName();
+    const provider = this.getProvider(providerName);
 
-    if (isDev) {
-      // در محیط توسعه فقط لاگ می‌کنیم - هزینه پیامک نمیدیم
-      this.logger.debug(`📱 [DEV] OTP for ${phone}: ${code}`);
-      return;
+    this.logger.log(
+      `Sending OTP using ${providerName} provider to ${this.maskPhone(phone)}`,
+    );
+
+    await provider.sendOtp({
+      phone,
+      code,
+    });
+  }
+
+  private getActiveProviderName(): SmsProviderName {
+    const provider =
+      this.configService.get<string>('SMS_PROVIDER') || 'melipayamak';
+
+    switch (provider) {
+      case 'melipayamak':
+      case 'smsir':
+        return provider;
+
+      default:
+        throw new ServiceUnavailableException({
+          code: 'SMS_PROVIDER_NOT_SUPPORTED',
+          message: `Unsupported SMS provider: ${provider}`,
+        });
     }
+  }
 
-    try {
-      const username = this.configService.get<string>('SMS_USERNAME');
-      const password = this.configService.get<string>('SMS_PASSWORD');
-      const from = this.configService.get<string>('SMS_FROM_NUMBER');
+  private getProvider(providerName: SmsProviderName): SmsProvider {
+    switch (providerName) {
+      case 'melipayamak':
+        return this.melipayamakProvider;
 
-      // ملی‌پیامک از SOAP API استفاده می‌کنه
-      const soapBody = `<?xml version="1.0" encoding="utf-8"?>
-        <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-          <soap:Body>
-            <SendSimpleSMS2 xmlns="http://tempuri.org/">
-              <username>${username}</username>
-              <password>${password}</password>
-              <to>${phone}</to>
-              <from>${from}</from>
-              <text>کد تایید شما: ${code}</text>
-              <isflash>false</isflash>
-            </SendSimpleSMS2>
-          </soap:Body>
-        </soap:Envelope>`;
-
-      const response = await fetch(
-        'https://api.payamak-panel.com/post/Send.asmx',
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'text/xml; charset=utf-8',
-            SOAPAction: 'http://tempuri.org/SendSimpleSMS2',
-          },
-          body: soapBody,
-        },
-      );
-
-      if (!response.ok) {
-        throw new Error(`SMS API responded with status ${response.status}`);
-      }
-
-      this.logger.log(`✅ OTP sent to ${phone}`);
-    } catch (error) {
-      this.logger.error(`❌ Failed to send OTP to ${phone}`, error);
-      // خطای SMS نباید فرآیند رو متوقف کنه - کد در Redis ذخیره شده
-      // کاربر می‌تونه دوباره درخواست بده
-      throw error;
+      case 'smsir':
+        return this.smsIrProvider;
     }
+  }
+
+  private maskPhone(phone: string): string {
+    if (phone.length < 7) return phone;
+    return `${phone.slice(0, 4)}***${phone.slice(-3)}`;
   }
 }

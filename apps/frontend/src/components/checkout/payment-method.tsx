@@ -1,74 +1,91 @@
 'use client';
 
-import { CreditCard, Wallet, Landmark } from 'lucide-react';
+import { CreditCard, Sparkles, Landmark } from 'lucide-react';
+import { motion } from 'framer-motion';
 
-interface PaymentMethodProps {
-  selectedMethod: 'online' | 'cash_on_delivery';
-  onMethodChange: (method: 'online' | 'cash_on_delivery') => void;
+export interface PaymentMethodProps {
+  selectedGateway: 'zarinpal' | 'digipay';
+  onGatewayChange: (gateway: 'zarinpal' | 'digipay') => void;
 }
 
-const paymentMethods = [
+const gatewayOptions = [
   {
-    id: 'online',
-    title: 'پرداخت اینترنتی (درگاه زرین‌پال)',
-    description: 'پرداخت آنلاین با تمامی کارت‌های عضو شتاب',
+    id: 'zarinpal',
+    title: 'پرداخت آنلاین زرین‌پال',
+    description: 'پرداخت سریع با کلیه کارت‌های شتاب بانکی کشور',
     icon: CreditCard,
-    disabled: false,
+    badge: null,
+    colorClass: 'text-sky-500 bg-sky-500/10 border-sky-500/15',
+    activeRing: 'border-sky-500/50 bg-sky-500/5 ring-sky-500/15',
   },
   {
-    id: 'cash_on_delivery',
-    title: 'پرداخت در محل',
-    description: 'پرداخت هنگام تحویل کالا',
-    icon: Wallet,
-    disabled: false,
+    id: 'digipay',
+    title: 'تسهیلات اقساطی و BNPL دیجی‌پی',
+    description: 'خرید اعتباری بدون کارمزد، تسهیلات اقساطی و کیف‌پول دیجی‌پی',
+    icon: Sparkles,
+    badge: 'پیشنهاد خرید اعتباری',
+    colorClass: 'text-[#008080] bg-[#008080]/10 border-[#008080]/15',
+    activeRing: 'border-[#008080]/50 bg-[#008080]/5 ring-[#008080]/15',
   },
-];
+] as const;
 
-export function PaymentMethod({ selectedMethod, onMethodChange }: PaymentMethodProps) {
+export function PaymentMethod({ selectedGateway, onGatewayChange }: PaymentMethodProps) {
   return (
-    <section className="bg-card border border-border/50 rounded-2xl p-6">
-      <div className="flex items-center gap-2 text-primary mb-5">
-        <Landmark className="w-5 h-5" />
-        <h2 className="text-lg font-bold text-foreground">روش پرداخت</h2>
+    <section className="bg-white/40 dark:bg-zinc-950/40 backdrop-blur-xl border border-white/40 dark:border-white/5 rounded-3xl p-6.5 shadow-[0_8px_32px_rgba(0,0,0,0.03)] dark:shadow-[0_16px_48px_rgba(0,0,0,0.3)] relative overflow-hidden" dir="rtl">
+      {/* Dynamic ambient highlight */}
+      <div className="absolute top-[-25%] right-[-15%] w-36 h-36 bg-sky-500/5 rounded-full blur-[40px] pointer-events-none" />
+
+      <div className="flex items-center gap-2.5 text-sky-500 mb-6 font-bold">
+        <div className="p-2 rounded-xl bg-sky-500/10 border border-sky-500/15">
+          <Landmark className="w-5 h-5" />
+        </div>
+        <h2 className="text-base font-black text-zinc-800 dark:text-zinc-100">روش پرداخت و درگاه بانکی</h2>
       </div>
 
-      <div className="space-y-3">
-        {paymentMethods.map((method) => {
-          const Icon = method.icon;
-          const isSelected = selectedMethod === method.id;
+      <div className="space-y-3.5">
+        {gatewayOptions.map((gateway) => {
+          const Icon = gateway.icon;
+          const isSelected = selectedGateway === gateway.id;
 
           return (
-            <label
-              key={method.id}
-              className={`flex items-center gap-3 p-4 border rounded-xl transition-all ${
-                method.disabled
-                  ? 'opacity-50 cursor-not-allowed bg-muted/30'
-                  : 'cursor-pointer hover:border-primary/30'
-              } ${
+            <motion.label
+              key={gateway.id}
+              whileHover={{ scale: 1.008 }}
+              whileTap={{ scale: 0.995 }}
+              className={`relative flex items-start sm:items-center gap-4.5 p-4.5 border-2 rounded-2xl transition-all cursor-pointer ${
                 isSelected
-                  ? 'border-primary/50 bg-primary/5 ring-1 ring-primary/20'
-                  : 'border-border'
+                  ? `${gateway.activeRing} ring-2`
+                  : 'border-zinc-200/50 dark:border-white/5 bg-white/20 dark:bg-white/5 hover:border-sky-500/30'
               }`}
             >
-              <input
-                type="radio"
-                name="payment"
-                checked={isSelected}
-                onChange={() => onMethodChange(method.id as 'online' | 'cash_on_delivery')}
-                disabled={method.disabled}
-              />
-              <div className="flex items-center gap-3 flex-1">
+              {gateway.badge && (
+                <span className="absolute top-0 left-5 bg-gradient-to-r from-[#008080] to-[#20B2AA] text-white text-[9px] font-black px-2.5 py-0.5 rounded-b-lg shadow-md shadow-[#008080]/10">
+                  {gateway.badge}
+                </span>
+              )}
+
+              <div className="flex items-center h-5 shrink-0 mt-1.5 sm:mt-0">
+                <input
+                  type="radio"
+                  name="payment_gateway"
+                  checked={isSelected}
+                  onChange={() => onGatewayChange(gateway.id as 'zarinpal' | 'digipay')}
+                  className="h-4.5 w-4.5 accent-sky-500 dark:accent-sky-400 bg-transparent cursor-pointer"
+                />
+              </div>
+
+              <div className="flex items-start sm:items-center gap-3.5 flex-1 min-w-0">
                 <div
-                  className={`p-2 rounded-lg ${isSelected ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}
+                  className={`p-2.5 rounded-xl shrink-0 border ${isSelected ? gateway.colorClass : 'bg-zinc-100/55 dark:bg-zinc-900/40 text-zinc-400 dark:text-zinc-600 border-zinc-200/40 dark:border-white/5'}`}
                 >
                   <Icon className="w-5 h-5" />
                 </div>
-                <div>
-                  <div className="font-bold text-sm">{method.title}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">{method.description}</div>
+                <div className="min-w-0">
+                  <div className="font-extrabold text-sm text-zinc-800 dark:text-zinc-100 leading-snug">{gateway.title}</div>
+                  <div className="text-xs text-zinc-500 dark:text-zinc-400 font-bold mt-1 leading-relaxed line-clamp-2">{gateway.description}</div>
                 </div>
               </div>
-            </label>
+            </motion.label>
           );
         })}
       </div>

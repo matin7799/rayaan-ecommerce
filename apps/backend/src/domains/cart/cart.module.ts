@@ -8,6 +8,7 @@ import { CartService } from './cart.service';
 import { CartController } from './cart.controller';
 import { CartSnapshot } from './entities/cart-snapshot.entity';
 import { MediaModule } from '../media/media.module';
+import { CartLockService } from './cart-lock.service';
 
 @Module({
   imports: [
@@ -16,7 +17,7 @@ import { MediaModule } from '../media/media.module';
     MediaModule,
   ],
   controllers: [CartController],
-  providers: [CartService, CartRepository],
-  exports: [CartService],
+  providers: [CartService, CartRepository, CartLockService],
+  exports: [CartService, CartLockService],
 })
 export class CartModule {}

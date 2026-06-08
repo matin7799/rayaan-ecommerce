@@ -6,12 +6,15 @@ export const API_ENDPOINTS = {
     REGISTER: '/auth/register',
     LOGIN: '/auth/login',
     REFRESH: '/auth/refresh',
+    LOGOUT: '/auth/logout',
   },
 
   // Users
   USERS: {
     ME: '/users/me',
     UPDATE_PROFILE: '/users/me',
+    ADMIN_ALL: '/users/admin',
+    ADMIN_THEME_PARTNER: (id: string) => `/users/admin/${id}/theme-partner`,
   },
 
   // Products
@@ -40,6 +43,7 @@ export const API_ENDPOINTS = {
     UPDATE_ITEM: (variantId: string) => `/cart/items/${variantId}`,
     REMOVE_ITEM: (variantId: string) => `/cart/items/${variantId}`,
     CLEAR: '/cart',
+    MERGE: '/cart/merge',
   },
 
   // Orders
@@ -64,6 +68,15 @@ export const API_ENDPOINTS = {
     INITIATE: '/payments/initiate',
     CALLBACK: '/payments/callback',
     ADMIN_ALL: '/payments/admin/all',
+  },
+
+  // DigiPay UPG — specific endpoints for installment/BNPL operations
+  DIGIPAY: {
+    PLANS: '/digipay/plans',
+    DELIVER: '/digipay/deliver',
+    REVERSE: '/digipay/reverse',
+    REFUND: '/digipay/refund',
+    REFUND_INQUIRY: (inquiryId: string) => `/digipay/refund-inquiry/${inquiryId}`,
   },
 
   // Addresses

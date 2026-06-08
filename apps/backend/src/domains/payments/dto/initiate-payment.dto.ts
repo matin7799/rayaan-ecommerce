@@ -1,9 +1,10 @@
-import { IsUUID, IsNotEmpty } from 'class-validator';
+import { IsUUID, IsNotEmpty, IsOptional, IsEnum } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { PaymentProvider } from '../enums/payment-provider.enum';
 
 // ──────────────────────────────────────────────────────
-// DTO شروع پرداخت — طبق API Contract: POST /api/v1/payments/initiate
-// ورودی فقط orderId است — درگاه توسط سیستم انتخاب می‌شود
+// DTO شروع پرداخت
+// ورودی شامل orderId و درگاه پرداخت انتخابی است
 // ──────────────────────────────────────────────────────
 export class InitiatePaymentDto {
   @ApiProperty({
@@ -13,4 +14,14 @@ export class InitiatePaymentDto {
   @IsUUID('4', { message: 'شناسه سفارش باید UUID معتبر باشد' })
   @IsNotEmpty({ message: 'شناسه سفارش الزامی است' })
   orderId!: string;
+
+  @ApiProperty({
+    description: 'درگاه پرداخت انتخابی',
+    enum: PaymentProvider,
+    required: false,
+    example: PaymentProvider.ZARINPAL,
+  })
+  @IsOptional()
+  @IsEnum(PaymentProvider, { message: 'درگاه پرداخت نامعتبر است' })
+  provider?: PaymentProvider;
 }

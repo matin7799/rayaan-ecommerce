@@ -9,6 +9,7 @@ import {
   UseGuards,
   BadRequestException,
   Res,
+  Header,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -23,6 +24,7 @@ import {
 } from '../../common/decorators/throttle.decorator';
 import type { Request } from 'express';
 import type { Response } from 'express';
+import { JwtService } from '@nestjs/jwt';
 
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
@@ -30,12 +32,17 @@ import { LoginDto } from './dto/login.dto';
 import { RequestOtpDto } from './dto/request-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { AuthBlacklistService } from './auth-blacklist.service';
 
 @UseGuards(ThrottlerGuard)
 @ApiTags('Authentication')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly jwtService: JwtService,
+    private readonly authBlacklistService: AuthBlacklistService,
+  ) {}
 
   private setAuthCookies(res: Response, refreshToken: string): void {
     const isProduction = process.env.NODE_ENV === 'production';
@@ -51,6 +58,9 @@ export class AuthController {
   // ==================== OTP Endpoints ====================
 
   @Post('otp/request')
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
   @ThrottleOtp()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'درخواست ارسال کد OTP' })
@@ -62,6 +72,9 @@ export class AuthController {
   }
 
   @Post('otp/verify')
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
   @ThrottleOtp()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'تایید کد OTP' })
@@ -83,6 +96,9 @@ export class AuthController {
   // ==================== Register Endpoints ====================
 
   @Post('register')
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
   @ThrottleAuth()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'ثبت‌نام کاربر جدید' })
@@ -97,7 +113,10 @@ export class AuthController {
   ) {
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const tempToken = authHeader.substring(7);
-      const result = await this.authService.registerWithTempToken(tempToken, dto);
+      const result = await this.authService.registerWithTempToken(
+        tempToken,
+        dto,
+      );
       if (result.refreshToken) {
         this.setAuthCookies(res, result.refreshToken);
       }
@@ -119,6 +138,9 @@ export class AuthController {
   // ==================== Login Endpoints ====================
 
   @Post('login')
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
   @ThrottleAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'ورود با رمز عبور' })
@@ -136,6 +158,9 @@ export class AuthController {
   }
 
   @Post('refresh')
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'تمدید توکن' })
   @ApiResponse({ status: 200, description: 'توکن جدید صادر شد' })
@@ -154,13 +179,67 @@ export class AuthController {
   }
 
   @Post('logout')
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'خروج از سیستم' })
-  logout(
-    @Body('refreshToken') _refreshToken: string,
+  async logout(
+    @Req() req: Request,
+    @Body('refreshToken') bodyRefreshToken: string,
     @Res({ passthrough: true }) res: Response,
   ) {
-    res.clearCookie('refresh_token', { path: '/api/v1/auth' });
+    // 1. Invalidate Access Token if provided
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const accessToken = authHeader.substring(7);
+      try {
+        const payload = this.jwtService.decode(accessToken);
+        if (payload && payload.exp) {
+          const remainingSec = Math.max(
+            0,
+            payload.exp - Math.floor(Date.now() / 1000),
+          );
+          await this.authBlacklistService.blacklistToken(
+            accessToken,
+            remainingSec,
+          );
+        }
+      } catch {
+        // Silently catch decoding error
+      }
+    }
+
+    // 2. Invalidate Refresh Token if provided
+    const cookieToken = req.cookies?.refresh_token;
+    const refreshToken = bodyRefreshToken || cookieToken;
+    if (refreshToken) {
+      try {
+        const payload = this.jwtService.decode(refreshToken);
+        if (payload && payload.exp) {
+          const remainingSec = Math.max(
+            0,
+            payload.exp - Math.floor(Date.now() / 1000),
+          );
+          await this.authBlacklistService.blacklistToken(
+            refreshToken,
+            remainingSec,
+          );
+        }
+      } catch {
+        // Silently catch decoding error
+      }
+    }
+
+    // 3. Clear the refresh token cookie
+    const isProduction = process.env.NODE_ENV === 'production';
+    res.clearCookie('refresh_token', {
+      path: '/api/v1/auth',
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: 'lax',
+    });
+
     return { message: 'Logged out successfully' };
   }
 }

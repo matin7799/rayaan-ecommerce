@@ -117,4 +117,34 @@ export const blogService = {
     );
     return data.data.items.filter(blog => blog.featuredImage);
   },
+
+  /**
+   * Create a new blog post / story (Admin)
+   */
+  createBlog: async (payload: Partial<Blog>): Promise<Blog> => {
+    const { data } = await apiClient.post<ApiResponse<Blog>>(
+      API_ENDPOINTS.BLOGS.LIST,
+      payload
+    );
+    return data.data;
+  },
+
+  /**
+   * Update blog post / story (Admin)
+   */
+  updateBlog: async (id: string, payload: Partial<Blog>): Promise<Blog> => {
+    const { data } = await apiClient.patch<ApiResponse<Blog>>(
+      API_ENDPOINTS.BLOGS.DETAIL(id),
+      payload
+    );
+    return data.data;
+  },
+
+  /**
+   * Delete blog post / story (Admin)
+   */
+  deleteBlog: async (id: string): Promise<void> => {
+    await apiClient.delete(API_ENDPOINTS.BLOGS.DETAIL(id));
+  },
 };
+

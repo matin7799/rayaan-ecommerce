@@ -6,9 +6,7 @@ import { PaymentStatus } from './enums/payment-status.enum';
 
 // ──────────────────────────────────────────────────────
 // ریپازیتوری پرداخت — لایه دسترسی به دیتابیس
-// طبق معماری Clean Layered: فقط این لایه مستقیماً با DB کار می‌کند
 // ──────────────────────────────────────────────────────
-
 @Injectable()
 export class PaymentsRepository {
   constructor(
@@ -16,31 +14,18 @@ export class PaymentsRepository {
     private readonly repo: Repository<Payment>,
   ) {}
 
-  // ────────────────────────────────────────────
-  // ساخت رکورد جدید پرداخت (بدون ذخیره)
-  // ────────────────────────────────────────────
   create(data: Partial<Payment>): Payment {
     return this.repo.create(data);
   }
 
-  // ────────────────────────────────────────────
-  // ذخیره رکورد پرداخت در دیتابیس
-  // ────────────────────────────────────────────
   async save(payment: Payment): Promise<Payment> {
     return this.repo.save(payment);
   }
 
-  // ────────────────────────────────────────────
-  // پیدا کردن پرداخت با شناسه
-  // ────────────────────────────────────────────
   async findById(id: string): Promise<Payment | null> {
     return this.repo.findOne({ where: { id } });
   }
 
-  // ────────────────────────────────────────────
-  // پیدا کردن پرداخت با شناسه رهگیری درگاه
-  // این متد در callback handler استفاده می‌شود
-  // ────────────────────────────────────────────
   async findByProviderTrackId(trackId: string): Promise<Payment | null> {
     return this.repo.findOne({
       where: { provider_track_id: trackId },
@@ -48,10 +33,13 @@ export class PaymentsRepository {
     });
   }
 
-  // ────────────────────────────────────────────
-  // پیدا کردن آخرین پرداخت pending یک سفارش
-  // برای جلوگیری از ساخت پرداخت تکراری
-  // ────────────────────────────────────────────
+  async findByProviderRefId(refId: string): Promise<Payment | null> {
+    return this.repo.findOne({
+      where: { provider_ref_id: refId },
+      relations: ['order'],
+    });
+  }
+
   async findPendingByOrderId(orderId: string): Promise<Payment | null> {
     return this.repo.findOne({
       where: {
@@ -62,9 +50,6 @@ export class PaymentsRepository {
     });
   }
 
-  // ────────────────────────────────────────────
-  // لیست تمام تلاش‌های پرداخت یک سفارش
-  // ────────────────────────────────────────────
   async findAllByOrderId(orderId: string): Promise<Payment[]> {
     return this.repo.find({
       where: { order_id: orderId },

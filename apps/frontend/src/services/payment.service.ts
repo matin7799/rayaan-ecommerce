@@ -4,6 +4,7 @@ import { API_ENDPOINTS } from '@/lib/api/endpoints';
 // ========== Types ==========
 export interface InitiatePaymentPayload {
   orderId: string;
+  provider?: string;
 }
 
 export interface InitiatePaymentResponse {

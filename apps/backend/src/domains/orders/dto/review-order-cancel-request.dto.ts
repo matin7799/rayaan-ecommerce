@@ -3,7 +3,9 @@ import { OrderCancelRequestStatus } from '../entities/order-cancel-request.entit
 
 export class ReviewOrderCancelRequestDto {
   @IsEnum(OrderCancelRequestStatus)
-  status!: OrderCancelRequestStatus.APPROVED | OrderCancelRequestStatus.REJECTED;
+  status!:
+    | OrderCancelRequestStatus.APPROVED
+    | OrderCancelRequestStatus.REJECTED;
 
   @IsString()
   @IsOptional()

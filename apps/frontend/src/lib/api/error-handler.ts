@@ -60,6 +60,9 @@ const ERROR_MESSAGES: Record<string, string> = {
 export function getErrorMessage(error: unknown): string {
   if (error instanceof AxiosError) {
     const apiError = error.response?.data as ApiErrorResponse;
+    const nestError = error.response?.data as
+      | { message?: string | string[]; error?: string }
+      | undefined;
     
     if (apiError?.error?.code) {
       return ERROR_MESSAGES[apiError.error.code] || apiError.error.message || 'خطای نامشخص';
@@ -80,6 +83,13 @@ export function getErrorMessage(error: unknown): string {
     }
     if (error.response?.status === 503) {
       return ERROR_MESSAGES.SERVICE_UNAVAILABLE;
+    }
+
+    if (Array.isArray(nestError?.message) && nestError.message.length > 0) {
+      return String(nestError.message[0]);
+    }
+    if (typeof nestError?.message === 'string' && nestError.message.trim().length > 0) {
+      return nestError.message;
     }
     
     return error.message || 'خطای نامشخص';

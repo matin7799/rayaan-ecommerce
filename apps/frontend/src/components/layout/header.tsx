@@ -3,30 +3,48 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { User, Sun, Moon, LogOut } from 'lucide-react';
+import { User, Sun, Moon, LogOut, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { MegaMenu } from './MegaMenu';
 import { AdvancedSearch } from './AdvancedSearch';
-import { CartDropdown } from '@/components/cart/cart-dropdown';
+import dynamic from 'next/dynamic';
+
+const CartDropdown = dynamic(
+  () => import('@/components/cart/cart-dropdown').then((mod) => mod.CartDropdown),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-11 w-11 rounded-full bg-white/30 dark:bg-gray-800/30 animate-pulse border border-white/40 dark:border-gray-700/50" />
+    ),
+  }
+);
 import { useTheme } from 'next-themes';
 import { useAuthStore } from '@/lib/store/auth-store';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 
 interface HeaderProps {
   showHero?: boolean;
 }
 
+import { performBulletproofLogout } from '@/utils/logout';
+
 export function Header({ showHero = false }: HeaderProps) {
   const [isScrolled, setIsScrolled] = useState(false);
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  const { user, accessToken, logout, sessionChecked } = useAuthStore();
+  const { user, accessToken, sessionChecked } = useAuthStore();
   const router = useRouter();
+  const pathname = usePathname();
+  const [isHeaderNavigating, setIsHeaderNavigating] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setMounted(true), 0);
     return () => clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    setIsHeaderNavigating(false);
+  }, [pathname]);
 
   useEffect(() => {
     const handleScroll = () => setIsScrolled(window.scrollY > 20);
@@ -35,20 +53,40 @@ export function Header({ showHero = false }: HeaderProps) {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  const handleHeaderLinkClick = (event: React.MouseEvent<HTMLElement>) => {
+    const anchor = (event.target as HTMLElement).closest('a[href]');
+    if (!anchor) return;
+
+    const href = anchor.getAttribute('href');
+    if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
+
+    const url = new URL(href, window.location.origin);
+    if (url.origin === window.location.origin && `${url.pathname}${url.search}` !== `${pathname}${window.location.search}`) {
+      setIsHeaderNavigating(true);
+    }
+  };
+
   const handleLogout = () => {
-    logout();
-    router.push('/login');
+    setIsHeaderNavigating(true);
+    performBulletproofLogout();
   };
 
   return (
     <>
       <header
+        onClickCapture={handleHeaderLinkClick}
         className={`fixed top-0 w-full z-50 transition-all duration-500 ${
           isScrolled
             ? 'bg-white/40 dark:bg-gray-950/40 backdrop-blur-xl saturate-150 border-b border-white/40 dark:border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.05)] py-1'
             : 'bg-transparent pt-4'
         }`}
       >
+        {isHeaderNavigating && (
+          <div className="absolute inset-x-0 top-0 h-1 overflow-hidden bg-[#008080]/10">
+            <div className="h-full w-1/3 animate-pulse rounded-full bg-linear-to-r from-[#008080] to-[#20B2AA] shadow-[0_0_18px_rgba(0,128,128,0.55)]" />
+          </div>
+        )}
+
         <div className="container mx-auto px-4 h-20 flex items-center justify-between gap-6">
 
           {/* Right: Logo + nav links */}
