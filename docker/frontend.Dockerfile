@@ -8,7 +8,7 @@ FROM base AS deps
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY apps/frontend/package.json apps/frontend/package.json
 # Install all dependencies (including devDependencies) for the build stage
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile --filter frontend... --prod=false
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --no-frozen-lockfile --filter frontend... --prod=false
 
 FROM deps AS build
 WORKDIR /app
