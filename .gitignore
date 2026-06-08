@@ -8,3 +8,5 @@ coverage
 *.tar.gz
 *.zip
 .pnpm-store
+temp_staging/
+
